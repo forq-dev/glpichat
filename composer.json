@@ -1,0 +1,9 @@
+{
+  "name": "glpi/glpichat",
+  "description": "Chat contextual vinculado a chamados do GLPI.",
+  "type": "glpi-plugin",
+  "license": "GPL-3.0-or-later",
+  "require": {
+    "php": ">=8.2"
+  }
+}

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace GlpiPlugin\Glpichat\Controller;
 
 use Glpi\Controller\AbstractController;
+use Glpi\Http\Firewall;
+use Glpi\Security\Attribute\SecurityStrategy;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -25,6 +27,7 @@ require_once dirname(__DIR__) . '/functions.php';
 final class UploadController extends AbstractController
 {
     #[Route('/Upload', name: 'glpichat_upload', methods: ['POST'])]
+    #[SecurityStrategy(Firewall::STRATEGY_AUTHENTICATED)]
     public function __invoke(Request $request): Response
     {
         try {

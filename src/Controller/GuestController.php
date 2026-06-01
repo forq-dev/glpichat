@@ -137,7 +137,16 @@ final class GuestController extends AbstractController
             . '<main class="glpichat glpichat-guest" data-ticket-id="' . htmlescape((string) $tickets_id) . '" data-room-id="' . htmlescape((string) $rooms_id) . '" data-guest="1">'
             . '<h1>GLPI Chat</h1><p>' . htmlescape($guest_name) . '</p>'
             . '<div class="glpichat-messages" data-role="messages"></div>'
-            . '<form class="glpichat-send" data-role="guest-send-form"><textarea name="content" rows="3" required></textarea><input type="file" name="file"><button type="submit">Enviar</button></form>'
+            . '<form class="glpichat-send" data-role="guest-send-form">'
+            . '<input id="guest-attach" class="glpichat-file-input" type="file" name="file">'
+            . '<label for="guest-attach" class="glpichat-attach" title="Anexar arquivo">'
+            . '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>'
+            . '</label>'
+            . '<textarea name="content" placeholder="Escreva uma mensagem..." required></textarea>'
+            . '<button type="submit" class="glpichat-send-btn" title="Enviar mensagem">'
+            . '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>'
+            . '</button>'
+            . '</form>'
             . '</main><script src="../public/js/glpichat.js"></script></body></html>';
     }
 }

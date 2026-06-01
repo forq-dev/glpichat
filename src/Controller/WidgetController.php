@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace GlpiPlugin\Glpichat\Controller;
 
 use Glpi\Controller\AbstractController;
+use Glpi\Http\Firewall;
+use Glpi\Security\Attribute\SecurityStrategy;
 use RuntimeException;
 use Session;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -29,6 +31,7 @@ require_once dirname(__DIR__) . '/functions.php';
 final class WidgetController extends AbstractController
 {
     #[Route('/Widget/Channels', name: 'glpichat_widget_channels', methods: ['GET'])]
+    #[SecurityStrategy(Firewall::STRATEGY_AUTHENTICATED)]
     public function channels(Request $request): Response
     {
         try {
@@ -48,6 +51,7 @@ final class WidgetController extends AbstractController
     }
 
     #[Route('/Widget/Poll', name: 'glpichat_widget_poll', methods: ['POST'])]
+    #[SecurityStrategy(Firewall::STRATEGY_AUTHENTICATED)]
     public function poll(Request $request): Response
     {
         try {
@@ -102,6 +106,7 @@ final class WidgetController extends AbstractController
     }
 
     #[Route('/Widget/History', name: 'glpichat_widget_history', methods: ['GET'])]
+    #[SecurityStrategy(Firewall::STRATEGY_AUTHENTICATED)]
     public function history(Request $request): Response
     {
         try {
@@ -125,6 +130,7 @@ final class WidgetController extends AbstractController
     }
 
     #[Route('/Widget/MarkRead', name: 'glpichat_widget_mark_read', methods: ['POST'])]
+    #[SecurityStrategy(Firewall::STRATEGY_AUTHENTICATED)]
     public function markRead(Request $request): Response
     {
         try {

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace GlpiPlugin\Glpichat\Controller;
 
 use Glpi\Controller\AbstractController;
+use Glpi\Http\Firewall;
+use Glpi\Security\Attribute\SecurityStrategy;
 use RuntimeException;
 use Session;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -22,6 +24,7 @@ require_once dirname(__DIR__) . '/functions.php';
 final class InviteManageController extends AbstractController
 {
     #[Route('/Invite/List', name: 'glpichat_invite_list', methods: ['GET'])]
+    #[SecurityStrategy(Firewall::STRATEGY_AUTHENTICATED)]
     public function list(Request $request): Response
     {
         try {
@@ -41,6 +44,7 @@ final class InviteManageController extends AbstractController
     }
 
     #[Route('/Invite/Revoke', name: 'glpichat_invite_revoke', methods: ['POST'])]
+    #[SecurityStrategy(Firewall::STRATEGY_AUTHENTICATED)]
     public function revoke(Request $request): Response
     {
         try {
@@ -60,6 +64,7 @@ final class InviteManageController extends AbstractController
     }
 
     #[Route('/Invite/Reissue', name: 'glpichat_invite_reissue', methods: ['POST'])]
+    #[SecurityStrategy(Firewall::STRATEGY_AUTHENTICATED)]
     public function reissue(Request $request): Response
     {
         try {

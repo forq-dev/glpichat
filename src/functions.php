@@ -486,12 +486,12 @@ function glpichat_default_template_subject(): string
 
 function glpichat_default_template_text(): string
 {
-    return "##glpichat.ticket_label##\n##glpichat.sender_name##: ##glpichat.message_preview## ##glpichat.unread_badge##";
+    return "##glpichat.sender_name##: ##glpichat.message_preview## ##glpichat.unread_badge##";
 }
 
 function glpichat_default_template_html(): string
 {
-    return '<p><strong>##glpichat.ticket_label##</strong></p><p>##glpichat.sender_name##: ##glpichat.message_preview## ##glpichat.unread_badge##</p>';
+    return '<p>##glpichat.sender_name##: ##glpichat.message_preview## ##glpichat.unread_badge##</p>';
 }
 
 function glpichat_install_default_notifications(): void
@@ -692,15 +692,15 @@ function glpichat_latest_message_for_ticket(int $tickets_id): array
 
     $row = $DB->request([
         'SELECT' => [
-            'm.id',
-            'm.content',
-            'm.participant_type',
-            'm.users_id',
-            'm.participants_id',
+            'id',
+            'content',
+            'participant_type',
+            'users_id',
+            'participants_id',
         ],
-        'FROM' => ['m' => 'glpi_plugin_glpichat_messages'],
-        'WHERE' => ['m.tickets_id' => $tickets_id],
-        'ORDER' => ['m.id DESC'],
+        'FROM' => 'glpi_plugin_glpichat_messages',
+        'WHERE' => ['tickets_id' => $tickets_id],
+        'ORDER' => ['id DESC'],
         'LIMIT' => 1,
     ])->current();
 
@@ -748,20 +748,23 @@ function glpichat_unread_count_for_user_ticket(int $users_id, int $tickets_id): 
     global $DB;
 
     $participants = $DB->request([
-        'SELECT' => ['p.id', 'p.rooms_id'],
-        'FROM' => ['p' => 'glpi_plugin_glpichat_participants'],
+        'SELECT' => [
+            'glpi_plugin_glpichat_participants.id',
+            'glpi_plugin_glpichat_participants.rooms_id',
+        ],
+        'FROM' => 'glpi_plugin_glpichat_participants',
         'INNER JOIN' => [
             'glpi_plugin_glpichat_rooms' => [
                 'ON' => [
                     'glpi_plugin_glpichat_rooms' => 'id',
-                    'p' => 'rooms_id',
+                    'glpi_plugin_glpichat_participants' => 'rooms_id',
                 ],
             ],
         ],
         'WHERE' => [
-            'p.users_id' => $users_id,
-            'p.participant_type' => GLPICHAT_ACTOR_USER,
-            'p.left_at' => null,
+            'glpi_plugin_glpichat_participants.users_id' => $users_id,
+            'glpi_plugin_glpichat_participants.participant_type' => GLPICHAT_ACTOR_USER,
+            'glpi_plugin_glpichat_participants.left_at' => null,
             'glpi_plugin_glpichat_rooms.tickets_id' => $tickets_id,
         ],
     ]);
@@ -776,17 +779,7 @@ function glpichat_unread_count_for_user_ticket(int $users_id, int $tickets_id): 
         $total_unread += glpichat_unread_count_fast($rooms_id, $participants_id);
     }
 
-    if ($total_unread > 0) {
-        return $total_unread;
-    }
-
-    $fallback = $DB->request([
-        'SELECT' => ['COUNT' => 'cpt'],
-        'FROM' => 'glpi_plugin_glpichat_messages',
-        'WHERE' => ['tickets_id' => $tickets_id],
-    ])->current();
-
-    return (int) ($fallback['cpt'] ?? 0);
+    return $total_unread;
 }
 
 function glpichat_display_unread_count(int $raw_unread): int
@@ -953,27 +946,7 @@ function glpichat_events(int $rooms_id, int $last_event_id): array
 
 function glpichat_unread_count_fast(int $rooms_id, int $participants_id): int
 {
-    if ($participants_id <= 0) {
-        return 0;
-    }
-
-    $last_message_id = glpichat_room_last_message_id($rooms_id);
-    if ($last_message_id <= 0) {
-        return 0;
-    }
-
-    global $DB;
-    $read = $DB->request([
-        'FROM' => 'glpi_plugin_glpichat_readstates',
-        'WHERE' => [
-            'rooms_id' => $rooms_id,
-            'participants_id' => $participants_id,
-        ],
-        'LIMIT' => 1,
-    ])->current();
-    $last_read = is_array($read) ? (int) $read['last_read_messages_id'] : 0;
-
-    return max(0, $last_message_id - $last_read);
+    return glpichat_unread_count_for_participant($rooms_id, $participants_id);
 }
 
 function glpichat_create_invite(int $tickets_id, string $guest_name, string $guest_email): array
@@ -1150,13 +1123,129 @@ function glpichat_messages_before(int $rooms_id, int $before_id, int $limit): ar
     return array_reverse($rows);
 }
 
-function glpichat_mark_read(int $rooms_id, int $participants_id, int $last_read_messages_id): void
+function glpichat_readstate_last_message_id(int $rooms_id, int $participants_id): int
+{
+    global $DB;
+
+    $readstate = $DB->request([
+        'FROM' => 'glpi_plugin_glpichat_readstates',
+        'WHERE' => [
+            'rooms_id' => $rooms_id,
+            'participants_id' => $participants_id,
+        ],
+        'LIMIT' => 1,
+    ])->current();
+
+    return is_array($readstate) ? (int) $readstate['last_read_messages_id'] : 0;
+}
+
+function glpichat_participant_for_readstate(int $rooms_id, int $participants_id): array
+{
+    global $DB;
+
+    $participant = $DB->request([
+        'SELECT' => ['id', 'rooms_id', 'participant_type', 'users_id'],
+        'FROM' => 'glpi_plugin_glpichat_participants',
+        'WHERE' => [
+            'id' => $participants_id,
+            'rooms_id' => $rooms_id,
+            'left_at' => null,
+        ],
+        'LIMIT' => 1,
+    ])->current();
+
+    if (!is_array($participant)) {
+        throw new RuntimeException('Chat participant not found.');
+    }
+
+    return $participant;
+}
+
+function glpichat_unread_where_for_participant(array $participant, int $last_read_messages_id): array
+{
+    $rooms_id = (int) ($participant['rooms_id'] ?? 0);
+    $participants_id = (int) ($participant['id'] ?? 0);
+    $participant_type = (string) ($participant['participant_type'] ?? '');
+    $users_id = (int) ($participant['users_id'] ?? 0);
+
+    $where = [
+        'rooms_id' => $rooms_id,
+        ['id' => ['>', $last_read_messages_id]],
+    ];
+
+    if ($participant_type === GLPICHAT_ACTOR_USER && $users_id > 0) {
+        $where[] = [
+            'NOT' => [
+                'participant_type' => GLPICHAT_ACTOR_USER,
+                'users_id' => $users_id,
+            ],
+        ];
+    }
+
+    if ($participant_type === GLPICHAT_ACTOR_GUEST && $participants_id > 0) {
+        $where[] = [
+            'NOT' => [
+                'participants_id' => $participants_id,
+            ],
+        ];
+    }
+
+    return $where;
+}
+
+function glpichat_unread_count_for_participant(int $rooms_id, int $participants_id): int
 {
     global $DB;
 
     if ($participants_id <= 0) {
+        return 0;
+    }
+
+    $participant = glpichat_participant_for_readstate($rooms_id, $participants_id);
+    $last_read_messages_id = glpichat_readstate_last_message_id($rooms_id, $participants_id);
+
+    $row = $DB->request([
+        'COUNT' => 'cpt',
+        'FROM' => 'glpi_plugin_glpichat_messages',
+        'WHERE' => glpichat_unread_where_for_participant($participant, $last_read_messages_id),
+    ])->current();
+
+    return (int) ($row['cpt'] ?? 0);
+}
+
+function glpichat_assert_message_belongs_to_room(int $rooms_id, int $messages_id): void
+{
+    global $DB;
+
+    if ($messages_id === 0) {
         return;
     }
+
+    $message = $DB->request([
+        'SELECT' => ['id'],
+        'FROM' => 'glpi_plugin_glpichat_messages',
+        'WHERE' => [
+            'id' => $messages_id,
+            'rooms_id' => $rooms_id,
+        ],
+        'LIMIT' => 1,
+    ])->current();
+
+    if (!is_array($message)) {
+        throw new RuntimeException('Read marker message does not belong to this chat room.');
+    }
+}
+
+function glpichat_mark_read(int $rooms_id, int $participants_id, int $last_read_messages_id): int
+{
+    global $DB;
+
+    if ($participants_id <= 0) {
+        throw new RuntimeException('Invalid chat participant.');
+    }
+
+    glpichat_participant_for_readstate($rooms_id, $participants_id);
+    glpichat_assert_message_belongs_to_room($rooms_id, $last_read_messages_id);
 
     $existing = $DB->request([
         'FROM' => 'glpi_plugin_glpichat_readstates',
@@ -1170,45 +1259,36 @@ function glpichat_mark_read(int $rooms_id, int $participants_id, int $last_read_
     if (is_array($existing)) {
         $current = (int) $existing['last_read_messages_id'];
         $next = max($current, $last_read_messages_id);
-        $DB->update('glpi_plugin_glpichat_readstates', [
+        $updated = $DB->update('glpi_plugin_glpichat_readstates', [
             'last_read_messages_id' => $next,
             'date_mod' => $_SESSION['glpi_currenttime'] ?? date('Y-m-d H:i:s'),
         ], [
             'id' => (int) $existing['id'],
         ]);
-        return;
+        if (!$updated) {
+            throw new RuntimeException('Unable to update chat read state.');
+        }
+
+        return $next;
     }
 
-    $DB->insert('glpi_plugin_glpichat_readstates', [
+    $next = max(0, $last_read_messages_id);
+    $inserted = $DB->insert('glpi_plugin_glpichat_readstates', [
         'rooms_id' => $rooms_id,
         'participants_id' => $participants_id,
-        'last_read_messages_id' => max(0, $last_read_messages_id),
+        'last_read_messages_id' => $next,
         'date_mod' => $_SESSION['glpi_currenttime'] ?? date('Y-m-d H:i:s'),
     ]);
+    if (!$inserted) {
+        throw new RuntimeException('Unable to create chat read state.');
+    }
+
+    return $next;
 }
 
 function glpichat_unread_count(int $rooms_id, int $participants_id): int
 {
-    global $DB;
-
-    $read = $DB->request([
-        'FROM' => 'glpi_plugin_glpichat_readstates',
-        'WHERE' => [
-            'rooms_id' => $rooms_id,
-            'participants_id' => $participants_id,
-        ],
-        'LIMIT' => 1,
-    ])->current();
-    $last_read = is_array($read) ? (int) $read['last_read_messages_id'] : 0;
-
-    return (int) $DB->request([
-        'COUNT' => 'cpt',
-        'FROM' => 'glpi_plugin_glpichat_messages',
-        'WHERE' => [
-            'rooms_id' => $rooms_id,
-            ['id' => ['>', $last_read]],
-        ],
-    ])->current()['cpt'];
+    return glpichat_unread_count_for_participant($rooms_id, $participants_id);
 }
 
 function glpichat_list_user_channels(int $users_id, int $focus_tickets_id): array

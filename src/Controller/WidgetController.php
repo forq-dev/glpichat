@@ -25,6 +25,7 @@ use function glpichat_participant_id_for_user;
 use function glpichat_require_logged_csrf;
 use function glpichat_room_by_id;
 use function glpichat_room_id;
+use function glpichat_unread_count;
 
 require_once dirname(__DIR__) . '/functions.php';
 
@@ -91,6 +92,7 @@ final class WidgetController extends AbstractController
                     'last_message_id' => count($messages) > 0 ? (int) end($messages)['id'] : $after_id,
                     'last_event_id' => count($events) > 0 ? (int) end($events)['id'] : $after_event_id,
                     'participants_id' => $participants_id,
+                    'unread_count' => glpichat_unread_count($rooms_id, $participants_id),
                 ];
                 $count++;
             }
@@ -147,9 +149,14 @@ final class WidgetController extends AbstractController
             $room = glpichat_room_by_id($rooms_id);
             glpichat_assert_can_read_room((int) $room['tickets_id'], (string) $room['room_type']);
             $participants_id = glpichat_participant_id_for_user($rooms_id, $users_id);
-            glpichat_mark_read($rooms_id, $participants_id, $last_read_message_id);
+            $persisted_last_read_message_id = glpichat_mark_read($rooms_id, $participants_id, $last_read_message_id);
 
-            return new JsonResponse(['ok' => true, '_glpi_csrf_token' => Session::getNewCSRFToken()]);
+            return new JsonResponse([
+                'ok' => true,
+                'last_read_message_id' => $persisted_last_read_message_id,
+                'unread_count' => glpichat_unread_count($rooms_id, $participants_id),
+                '_glpi_csrf_token' => Session::getNewCSRFToken(),
+            ]);
         } catch (RuntimeException $e) {
             return new JsonResponse(['error' => $e->getMessage()], 400);
         }

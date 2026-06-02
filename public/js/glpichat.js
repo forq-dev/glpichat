@@ -257,6 +257,17 @@
     ticket.unreadTotal = total;
   };
 
+  const applyChannelUnread = (channel, payload) => {
+    if (!Object.prototype.hasOwnProperty.call(payload, "unread_count")) {
+      return false;
+    }
+
+    const nextUnread = Number(payload.unread_count || 0);
+    const changed = Number(channel.unread_count || 0) !== nextUnread;
+    channel.unread_count = nextUnread;
+    return changed;
+  };
+
   const tabLabel = (roomType) => (roomType === "internal" ? "Discussão técnica" : "Solicitante");
   const statusKeyFromCode = (status) => {
     const code = Number(status || 0);
@@ -808,7 +819,6 @@
       const lastId = Number(messages[messages.length - 1].id || 0);
       if (channel && lastId > 0) {
         markRead(channel.rooms_id, lastId).catch(console.error);
-        channel.unread_count = 0;
       }
     }
 
@@ -1321,7 +1331,21 @@
     fd.set("rooms_id", String(roomsId));
     fd.set("last_read_message_id", String(lastReadMessageId));
     fd.set("_glpi_csrf_token", state.csrf);
-    await postForm(`${pluginBase}/Widget/MarkRead`, fd);
+    const data = await postForm(`${pluginBase}/Widget/MarkRead`, fd);
+    for (const channel of state.channels.values()) {
+      if (Number(channel.rooms_id || 0) !== Number(roomsId || 0)) {
+        continue;
+      }
+      applyChannelUnread(channel, data);
+      channel.last_read_message_id = Number(data.last_read_message_id || channel.last_read_message_id || 0);
+      const ticket = state.tickets.get(channel.tickets_id);
+      if (ticket) {
+        recalcUnread(ticket);
+      }
+      renderDock();
+      break;
+    }
+    return data;
   };
 
   const mergeChannelMessages = (channel, incomingMessages) => {
@@ -1405,6 +1429,7 @@
         || (patch.messages.length > 0 ? patch.messages[patch.messages.length - 1].id : channel.last_message_id || 0)
       );
       channel.last_event_id = Number(patch.last_event_id || channel.last_event_id || 0);
+      applyChannelUnread(channel, patch);
       channel.renderedMessageIds = new Set(channel.messages.map((m) => Number(m.id || 0)));
       channel.messages_loaded = true;
       channel.history_failed = false;
@@ -1493,12 +1518,11 @@
         channel.last_message_id = Number(patch.last_message_id || channel.last_message_id || 0);
         channel.messages_loaded = true;
         channel.history_failed = false;
-        const ticket = state.tickets.get(channel.tickets_id);
-        const activeTab = ticket?.activeTab || "public";
-        const isOpen = state.openTicketIds.includes(channel.tickets_id);
-        if (!isOpen || activeTab !== channel.room_type) {
-          channel.unread_count += patch.messages.length;
-        }
+        channelChanged = true;
+        hasDockChanges = true;
+      }
+
+      if (applyChannelUnread(channel, patch)) {
         channelChanged = true;
         hasDockChanges = true;
       }

@@ -107,5 +107,59 @@ Se o GLPI não tiver um driver de cache em memória configurado (como Redis ou A
 * **Ação**: Registrar uma rotina de cron no GLPI para executar periodicamente a limpeza da tabela `glpi_plugin_glpichat_events` (removendo registros mais antigos que 30 dias).
 * **Motivo**: A tabela serve apenas para deltas visuais do chat ativo no navegador, acumulando milhões de dados mortos rapidamente. Limpá-la previne inchaço de armazenamento e mantém as consultas de polling rápidas a longo prazo.
 
+---
+
+## 🔑 6. Ajustes de Permissionamento e Segurança
+
+### A. Alinhamento da Permissão de Convites (`plugin_glpichat_invite`)
+* **Problema**: O backend valida `glpichat_revoke_invite()` e `glpichat_reissue_invite()` usando `CREATE` (direito de escrita), ignorando o direito de atualização (`UPDATE`) que está configurável na matriz de direitos de perfil.
+* **Ação**: Mudar a checagem no PHP para exigir `UPDATE` (`Session::haveRight('plugin_glpichat_invite', UPDATE)`), respeitando a separação de controle configurada no perfil.
+
+### B. Granularidade do Canal Técnico Interno (`plugin_glpichat_send_internal`)
+* **Problema**: Atualmente a visualização da aba Discussão Técnica exige o direito `CREATE`. Isso impede perfis que precisam apenas visualizar (auditores e observadores) de acessar o chat técnico passivamente.
+* **Ação**: Implementar suporte a `READ` em `ProfileTab.php`. Mudar a checagem em `glpichat_can_read_room()` para exigir `READ` para visualizar a aba técnica, e manter a checagem `CREATE` apenas para o ato de postar mensagens.
+
+### C. Ativação da Permissão Administrativa (`plugin_glpichat_admin`)
+* **Problema**: O direito `plugin_glpichat_admin` não é verificado em nenhuma parte do código do backend porque o plugin carece de uma interface de configurações.
+* **Ação**: Desenvolver um controller administrativo ou página de configuração para salvar variáveis do plugin (ex: `external_followup_user_id`, TTL de sessão de convidados) e protegê-lo com `Session::haveRight('plugin_glpichat_admin', READ/UPDATE)`.
+
+### D. Ocultação Total do Widget por Permissão
+* **Problema**: Atualmente, os arquivos CSS e JS do widget são carregados e o HTML básico do dock é injetado no DOM por padrão para todos os usuários logados, mesmo que o perfil do usuário não possua o direito de leitura do chat (`plugin_glpichat_read` com `READ` inativo). Isso causa injeção inútil de scripts no navegador e um ícone vazio ou quebrado na tela.
+* **Ação**: No arquivo `setup.php`, na função `plugin_init_glpichat()`, envolver o carregamento dos arquivos CSS e JS em uma checagem condicional de sessão e permissão:
+  ```php
+  if (isset($_SESSION['glpiactiveprofile']) && Session::haveRight('plugin_glpichat_read', READ)) {
+      $PLUGIN_HOOKS[Hooks::ADD_CSS]['glpichat'] = ['public/css/glpichat.css'];
+      $PLUGIN_HOOKS[Hooks::ADD_JAVASCRIPT]['glpichat'] = ['public/js/glpichat.js'];
+      // e os hooks legados de CSS/JS correspondentes
+  }
+  ```
+* **Ganho**: Segurança a nível de carregamento de recursos. Para quem não tem a permissão configurada no perfil, o widget de chat desaparece completamente do DOM e nenhum asset do chat (CSS/JS) é baixado pelo navegador, otimizando o carregamento de páginas do GLPI.
+
+---
+
+## 🛡️ 7. Auditoria de Vulnerabilidades Específicas
+
+### A. Vulnerabilidade Crítica de Stored XSS (Cross-Site Scripting)
+* **Vulnerabilidade**: No frontend (`glpichat.js`), a função `sanitize(text)` foi declarada de forma incompleta como `const sanitize = (text) => String(text || "")`, retornando a string original sem qualquer codificação. Além disso, em `TicketTab.php`, nomes de convidados (`invite.guest_name`) são injetados diretamente em `row.innerHTML`.
+* **Risco**: Ataques de execução de script arbitrário persistente. Se um usuário enviar uma mensagem ou criar um convite com tags de script (ex: `<script>` ou handlers `onerror`), o código será executado na sessão de outros usuários, incluindo administradores do GLPI (permitindo roubo de privilégios e alteração de dados).
+* **Ação de Correção**:
+  * Redefinir a função `sanitize()` no JS para codificar caracteres como `&`, `<`, `>`, `"`, `'` em entidades HTML equivalentes.
+  * Criar e aplicar uma função helper similar de escape no Javascript de renderização do `TicketTab.php`.
+
+### B. Proteção CSRF Incompleta no Backend
+* **Vulnerabilidade**: A função auxiliar `glpichat_require_logged_csrf(array $input)` em `src/functions.php` apenas valida se o usuário está logado via `Session::checkLoginUser()`, sem efetivamente validar o token CSRF (`_glpi_csrf_token`) que é enviado de forma consistente pelo frontend nas chamadas de escrita.
+* **Risco**: Uma requisição forjada a partir de um site malicioso de terceiros pode enviar mensagens ou criar/revogar convites na conta de um usuário do GLPI ativo.
+* **Ação de Correção**: Invocar o método oficial do GLPI `Session::validateCSRF($input)` na validação da função em `src/functions.php`.
+
+### C. Segurança de Uploads de Arquivos (RCE e Uploads Órfãos)
+* **Vulnerabilidade**: Arquivos enviados por usuários ou convidados são gravados diretamente no disco via `$file->move(GLPI_UPLOAD_DIR, $safe_name)` antes de validar a permissão ou a validade da inserção no banco de dados. Caso a criação do documento no GLPI falhe, o arquivo malicioso permanece silenciosamente gravado no servidor.
+* **Risco**: Upload de scripts maliciosos executáveis (RCE) e inchaço do armazenamento devido ao acúmulo de arquivos órfãos.
+* **Ação de Correção**:
+  * Verificar a validade da extensão do arquivo contra as extensões permitidas no GLPI com `DocumentType::isValidExtension()` e checar o tamanho do arquivo antes da movimentação física para o disco.
+  * Garantir a exclusão imediata e segura do arquivo temporário criado caso ocorra alguma exceção no método `Document::add()`.
+
+
+
+
 
 

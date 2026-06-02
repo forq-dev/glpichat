@@ -150,7 +150,7 @@
   height: min(72vh, 620px);
   right: 0;
   bottom: var(--glpichat-panel-bottom-offset);
-  grid-template-rows: auto auto 1fr auto;
+  grid-template-rows: auto 1fr;
   z-index: 1;
 }
 
@@ -496,11 +496,12 @@
 }
 
 .glpichat-notification-view {
-  border-bottom: 1px solid var(--glpichat-line);
   background: var(--glpichat-surface-soft);
   padding: 8px;
   display: grid;
+  grid-template-rows: auto 1fr;
   gap: 6px;
+  overflow: hidden;
 }
 
 .glpichat-notification-head {
@@ -516,6 +517,7 @@
 .glpichat-notification-list {
   display: grid;
   gap: 5px;
+  align-content: start;
 }
 
 .glpichat-notification-item,
@@ -598,40 +600,291 @@
 .glpichat-ticket-filter-list {
   display: grid;
   gap: 5px;
+  overflow-y: auto;
+  align-content: start;
 }
 
 .glpichat-invite {
   display: grid;
+  gap: 8px;
+  background: var(--glpichat-surface-soft);
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid var(--glpichat-line);
+}
+
+.glpichat-invite-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+}
+
+.glpichat-field-error {
+  color: #dc3545;
+  font-size: 10px;
+  font-weight: 600;
+  margin-top: 1px;
+  margin-left: 2px;
+  min-height: 12px;
+  display: block;
+  text-align: left;
+}
+
+.glpichat-invite input {
+  width: 100%;
+  border: 1px solid var(--glpichat-line);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  background: var(--glpichat-surface);
+  color: var(--glpichat-text);
+  outline: none;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.glpichat-invite input:focus {
+  border-color: var(--glpichat-accent-border);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--glpichat-accent) 15%, transparent);
+}
+
+.glpichat-invite input.is-invalid {
+  border-color: #dc3545;
+}
+
+.glpichat-invite input.is-invalid:focus {
+  border-color: #dc3545;
+  box-shadow: 0 0 0 2px color-mix(in srgb, #dc3545 15%, transparent);
+}
+
+.glpichat-invite button[type="submit"] {
+  border: 0;
+  border-radius: 6px;
+  background: var(--glpichat-accent);
+  color: var(--glpichat-accent-fg);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 8px;
+  cursor: pointer;
+  transition: background-color 160ms ease, transform 100ms ease;
+}
+
+.glpichat-invite button[type="submit"]:hover {
+  background: color-mix(in srgb, var(--glpichat-accent) 85%, black);
+}
+
+.glpichat-invite button[type="submit"]:active {
+  transform: scale(0.97);
+}
+
+/* --- Banner de Sucesso --- */
+.glpichat-invite-success {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: color-mix(in srgb, var(--glpichat-primary) 10%, var(--glpichat-surface));
+  border: 1px solid color-mix(in srgb, var(--glpichat-primary) 30%, var(--glpichat-line));
+  border-radius: 6px;
+  font-size: 11px;
+}
+
+.glpichat-invite-success-text {
+  color: var(--glpichat-primary);
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.glpichat-invite-success-row {
+  display: flex;
   gap: 6px;
+}
+
+.glpichat-invite-success-row input {
+  flex: 1;
+  padding: 4px 8px;
+  font-size: 11px;
+  border-radius: 4px;
+  background: var(--glpichat-surface);
+  border: 1px solid var(--glpichat-line);
+}
+
+.glpichat-copy-btn {
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 4px;
+  border: 1px solid var(--glpichat-primary);
+  background: var(--glpichat-primary);
+  color: var(--glpichat-primary-fg);
+  cursor: pointer;
+  transition: background-color 160ms ease, border-color 160ms ease, transform 100ms ease;
+}
+
+.glpichat-copy-btn:hover {
+  background: color-mix(in srgb, var(--glpichat-primary) 85%, black);
+}
+
+.glpichat-copy-btn:active {
+  transform: scale(0.95);
+}
+
+.glpichat-copy-btn.copied {
+  background: #28a745;
+  border-color: #28a745;
+  color: #fff;
+}
+
+/* --- Cards de Convites --- */
+.glpichat-invite-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  max-height: 250px;
+  overflow-y: auto;
+  border-top: 1px solid var(--glpichat-line);
+  padding-top: 10px;
+  align-content: start;
+}
+
+.glpichat-invite-card {
+  border: 1px solid var(--glpichat-line);
+  border-radius: 8px;
+  background: var(--glpichat-surface);
+  padding: 10px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 10px;
+  align-items: center;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.glpichat-invite-card:hover {
+  border-color: var(--glpichat-accent-border);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--tblr-body-color) 6%, transparent);
+}
+
+.glpichat-invite-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--glpichat-accent-soft);
+  color: var(--glpichat-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.glpichat-invite-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.glpichat-invite-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--glpichat-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.glpichat-invite-email {
+  font-size: 10px;
+  color: var(--glpichat-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: 1px;
+}
+
+.glpichat-invite-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.glpichat-badge {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 10px;
+  display: inline-block;
+  text-transform: uppercase;
+}
+
+.glpichat-badge-active {
+  background: color-mix(in srgb, #28a745 15%, var(--glpichat-surface));
+  color: #218838;
+  border: 1px solid color-mix(in srgb, #28a745 30%, transparent);
+}
+
+.glpichat-badge-expired,
+.glpichat-badge-revoked {
+  background: color-mix(in srgb, #dc3545 12%, var(--glpichat-surface));
+  color: #c82333;
+  border: 1px solid color-mix(in srgb, #dc3545 25%, transparent);
+}
+
+.glpichat-badge-accepted {
+  background: color-mix(in srgb, #007bff 15%, var(--glpichat-surface));
+  color: #0069d9;
+  border: 1px solid color-mix(in srgb, #007bff 30%, transparent);
+}
+
+.glpichat-invite-access {
+  font-size: 9px;
+  color: var(--glpichat-muted);
+}
+
+.glpichat-invite-card .glpichat-invite-success {
+  grid-column: span 3;
+  margin-top: 8px;
+  width: 100%;
+}
+
+.glpichat-invite-actions {
+  grid-column: span 3;
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  border-top: 1px solid var(--glpichat-line);
+  padding-top: 8px;
+  margin-top: 2px;
+}
+
+.glpichat-invite-actions button {
+  border: 1px solid var(--glpichat-line);
+  border-radius: 4px;
+  background: var(--glpichat-surface);
+  color: var(--glpichat-text);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 4px 8px;
+  cursor: pointer;
+  transition: all 160ms ease;
+}
+
+.glpichat-invite-actions button:hover {
+  background: var(--glpichat-hover-bg);
+  border-color: var(--glpichat-accent-border);
+}
+
+.glpichat-invite-actions button.action-revoke {
+  color: #c82333;
+  border-color: color-mix(in srgb, #dc3545 25%, var(--glpichat-line));
+}
+
+.glpichat-invite-actions button.action-revoke:hover {
+  background: color-mix(in srgb, #dc3545 8%, var(--glpichat-surface));
+  border-color: #dc3545;
 }
 
 .glpichat-invite-head {
   margin-bottom: 6px;
   color: var(--glpichat-text);
-}
-
-.glpichat-invite-table {
-  width: 100%;
-  margin-top: 8px;
-  border-collapse: collapse;
-  font-size: 12px;
-}
-
-.glpichat-invite-table th,
-.glpichat-invite-table td {
-  border: 1px solid var(--glpichat-line);
-  padding: 6px;
-  text-align: left;
-}
-
-.glpichat-invite-table th {
-  background: var(--glpichat-surface-soft);
-}
-
-.glpichat-invite-table td:last-child {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
 }
 
 @media (max-width: 980px) {
@@ -750,21 +1003,21 @@
 
 /* --- Scrollbars Personalizadas --- */
 .glpichat-messages::-webkit-scrollbar,
-.glpichat-panel-invites::-webkit-scrollbar,
+.glpichat-invite-list::-webkit-scrollbar,
 .glpichat-panel-notifications::-webkit-scrollbar {
   width: 6px;
 }
 .glpichat-messages::-webkit-scrollbar-track,
-.glpichat-panel-invites::-webkit-scrollbar-track {
+.glpichat-invite-list::-webkit-scrollbar-track {
   background: transparent;
 }
 .glpichat-messages::-webkit-scrollbar-thumb,
-.glpichat-panel-invites::-webkit-scrollbar-thumb {
+.glpichat-invite-list::-webkit-scrollbar-thumb {
   background: var(--glpichat-line);
   border-radius: 3px;
 }
 .glpichat-messages::-webkit-scrollbar-thumb:hover,
-.glpichat-panel-invites::-webkit-scrollbar-thumb:hover {
+.glpichat-invite-list::-webkit-scrollbar-thumb:hover {
   background: var(--glpichat-muted);
 }
 

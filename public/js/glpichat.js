@@ -154,16 +154,28 @@
     });
   };
 
+  let activeRequestPromise = Promise.resolve();
+
   const fetchJson = async (url, options) => {
-    const response = await fetch(url, options || { credentials: "same-origin" });
-    const data = await response.json();
-    if (!response.ok) {
-      throw new Error(data.error || "Request failed.");
-    }
-    if (data._glpi_csrf_token) {
-      state.csrf = data._glpi_csrf_token;
-    }
-    return data;
+    const nextPromise = activeRequestPromise.then(async () => {
+      if (options && options.body instanceof FormData) {
+        if (options.body.has("_glpi_csrf_token")) {
+          options.body.set("_glpi_csrf_token", state.csrf);
+        }
+      }
+      const response = await fetch(url, options || { credentials: "same-origin" });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Request failed.");
+      }
+      if (data._glpi_csrf_token) {
+        state.csrf = data._glpi_csrf_token;
+      }
+      return data;
+    });
+
+    activeRequestPromise = nextPromise.catch(() => {});
+    return nextPromise;
   };
 
   const postForm = async (url, formData, requestOptions = {}) => fetchJson(url, {
@@ -283,7 +295,6 @@
               <strong>Conversas</strong>
             </div>
           <div class="glpichat-notification-view" data-role="notifications"></div>
-            <div class="glpichat-panel-invites" data-role="invites"></div>
           </div>
           <button type="button" class="glpichat-chatbox-tab" data-role="launcher-tab" aria-label="Abrir conversas">
             <img class="glpichat-launcher-icon" src="${pluginBase}/public/img/launcher-placeholder.png" alt="Chat">
@@ -303,7 +314,7 @@
     ui.launcher = root.querySelector("[data-role='launcher']");
     ui.launcherPanel = root.querySelector("[data-role='launcher-panel']");
     ui.launcherNotifications = root.querySelector("[data-role='notifications']");
-    ui.launcherInvites = root.querySelector("[data-role='invites']");
+    ui.launcherInvites = null;
     
     ui.lightbox = root.querySelector("[data-role='lightbox']");
     ui.lightboxImg = root.querySelector("[data-role='lightbox-img']");
@@ -1037,79 +1048,259 @@
     });
   };
 
-  const refreshInvites = async (ticketsId) => {
+  const refreshInvites = async (ticketsId, lastCreatedUrl = null, reissuedInviteId = null) => {
+    if (!ui.launcherInvites) {
+      return;
+    }
     ui.launcherInvites.innerHTML = "";
 
     const head = document.createElement("div");
     head.className = "glpichat-invite-head";
-    head.innerHTML = `<strong>Invites #${ticketsId}</strong>`;
+    head.innerHTML = `<strong>Convites para Chamado #${ticketsId}</strong>`;
 
     const form = document.createElement("form");
     form.className = "glpichat-invite";
+    form.setAttribute("novalidate", "true");
     form.innerHTML = `
-      <input type="text" name="guest_name" placeholder="Nome do convidado" required>
-      <input type="email" name="guest_email" placeholder="Email do convidado">
+      <div class="glpichat-invite-field">
+        <input type="text" name="guest_name" placeholder="Nome do convidado" required>
+        <span class="glpichat-field-error" data-error-for="guest_name"></span>
+      </div>
+      <div class="glpichat-invite-field">
+        <input type="email" name="guest_email" placeholder="Email do convidado (opcional)">
+        <span class="glpichat-field-error" data-error-for="guest_email"></span>
+      </div>
       <button type="submit">Criar invite</button>
       <div data-role="result"></div>
     `;
 
+    const nameInput = form.querySelector("[name='guest_name']");
+    const emailInput = form.querySelector("[name='guest_email']");
+    const nameError = form.querySelector("[data-error-for='guest_name']");
+    const emailError = form.querySelector("[data-error-for='guest_email']");
+
+    const checkName = () => {
+      if (nameInput.value.trim() === "") {
+        nameError.textContent = "Por favor, informe o nome do convidado.";
+        nameInput.classList.add("is-invalid");
+        return false;
+      } else {
+        nameError.textContent = "";
+        nameInput.classList.remove("is-invalid");
+        return true;
+      }
+    };
+
+    const checkEmail = () => {
+      const email = emailInput.value.trim();
+      if (email !== "" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        emailError.textContent = "Por favor, insira um e-mail válido (ex: nome@dominio.com).";
+        emailInput.classList.add("is-invalid");
+        return false;
+      } else {
+        emailError.textContent = "";
+        emailInput.classList.remove("is-invalid");
+        return true;
+      }
+    };
+
+    nameInput.addEventListener("input", checkName);
+    nameInput.addEventListener("blur", checkName);
+    emailInput.addEventListener("input", checkEmail);
+    emailInput.addEventListener("blur", checkEmail);
+
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
-      const fd = new FormData(form);
-      fd.set("tickets_id", String(ticketsId));
-      fd.set("_glpi_csrf_token", state.csrf);
-      const created = await postForm(`${pluginBase}/Invite`, fd);
-      form.querySelector("[data-role='result']").textContent = `Link: ${created.url}`;
-      await refreshInvites(ticketsId);
+      
+      const isNameValid = checkName();
+      const isEmailValid = checkEmail();
+      if (!isNameValid || !isEmailValid) {
+        return;
+      }
+      const submitBtn = form.querySelector("button[type='submit']");
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Criando...";
+      }
+      try {
+        const fd = new FormData(form);
+        fd.set("tickets_id", String(ticketsId));
+        fd.set("_glpi_csrf_token", state.csrf);
+        const created = await postForm(`${pluginBase}/Invite`, fd);
+        await refreshInvites(ticketsId, created.url, null);
+      } catch (err) {
+        alert("Erro ao criar convite: " + err.message);
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = "Criar invite";
+        }
+      }
     });
 
     ui.launcherInvites.append(head, form);
 
-    const listData = await fetchJson(`${pluginBase}/Invite/List?tickets_id=${ticketsId}`, { credentials: "same-origin" });
-    const table = document.createElement("table");
-    table.className = "glpichat-invite-table";
-    table.innerHTML = "<thead><tr><th>Convidado</th><th>Status</th><th>Expira</th><th>Acesso</th><th>Ações</th></tr></thead>";
-
-    const tbody = document.createElement("tbody");
-    for (const invite of listData.invites || []) {
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${sanitize(invite.guest_name || "")}</td>
-        <td>${sanitize(invite.status || "")}</td>
-        <td>${sanitize(invite.expires_at || "")}</td>
-        <td>${invite.was_accessed ? "Sim" : "Não"}</td>
-        <td></td>
+    if (lastCreatedUrl && !reissuedInviteId) {
+      const resultDiv = form.querySelector("[data-role='result']");
+      const successBanner = document.createElement("div");
+      successBanner.className = "glpichat-invite-success";
+      successBanner.innerHTML = `
+        <div class="glpichat-invite-success-text">Convite criado com sucesso!</div>
+        <div class="glpichat-invite-success-row">
+          <input type="text" readonly value="${sanitize(lastCreatedUrl)}">
+          <button type="button" class="glpichat-copy-btn">Copiar</button>
+        </div>
       `;
-      const actions = tr.lastElementChild;
-
-      const revokeBtn = document.createElement("button");
-      revokeBtn.type = "button";
-      revokeBtn.textContent = "Revogar";
-      revokeBtn.addEventListener("click", async () => {
-        const fd = new FormData();
-        fd.set("invite_id", String(invite.id));
-        fd.set("_glpi_csrf_token", state.csrf);
-        await postForm(`${pluginBase}/Invite/Revoke`, fd);
-        await refreshInvites(ticketsId);
+      const copyBtn = successBanner.querySelector(".glpichat-copy-btn");
+      copyBtn.addEventListener("click", () => {
+        navigator.clipboard.writeText(lastCreatedUrl).then(() => {
+          copyBtn.textContent = "Copiado!";
+          copyBtn.classList.add("copied");
+          setTimeout(() => {
+            copyBtn.textContent = "Copiar";
+            copyBtn.classList.remove("copied");
+          }, 2000);
+        }).catch((err) => {
+          console.error("Falha ao copiar:", err);
+          alert("Por favor, copie o link manualmente.");
+        });
       });
-
-      const reissueBtn = document.createElement("button");
-      reissueBtn.type = "button";
-      reissueBtn.textContent = "Reemitir";
-      reissueBtn.addEventListener("click", async () => {
-        const fd = new FormData();
-        fd.set("invite_id", String(invite.id));
-        fd.set("_glpi_csrf_token", state.csrf);
-        const result = await postForm(`${pluginBase}/Invite/Reissue`, fd);
-        window.alert(`Novo link: ${result.url}`);
-        await refreshInvites(ticketsId);
-      });
-
-      actions.append(revokeBtn, reissueBtn);
-      tbody.appendChild(tr);
+      resultDiv.appendChild(successBanner);
     }
-    table.appendChild(tbody);
-    ui.launcherInvites.appendChild(table);
+
+    const listData = await fetchJson(`${pluginBase}/Invite/List?tickets_id=${ticketsId}`, { credentials: "same-origin" });
+    const listContainer = document.createElement("div");
+    listContainer.className = "glpichat-invite-list";
+
+    for (const invite of listData.invites || []) {
+      const card = document.createElement("div");
+      card.className = "glpichat-invite-card";
+
+      const initials = String(invite.guest_name || "G").trim().substring(0, 2).toUpperCase();
+      const statusClass = String(invite.status).toLowerCase();
+      const isExpired = statusClass === "expired";
+      const isRevoked = statusClass === "revoked";
+      const isActive = statusClass === "active";
+      const isAccepted = statusClass === "accepted";
+
+      let statusLabelStr = invite.status || "";
+      let badgeClass = "glpichat-badge-active";
+      if (isExpired) {
+        statusLabelStr = "Expirado";
+        badgeClass = "glpichat-badge-expired";
+      } else if (isRevoked) {
+        statusLabelStr = "Revogado";
+        badgeClass = "glpichat-badge-revoked";
+      } else if (isActive) {
+        statusLabelStr = "Ativo";
+        badgeClass = "glpichat-badge-active";
+      } else if (isAccepted) {
+        statusLabelStr = "Aceito";
+        badgeClass = "glpichat-badge-accepted";
+      }
+
+      card.innerHTML = `
+        <div class="glpichat-invite-avatar">${sanitize(initials)}</div>
+        <div class="glpichat-invite-info">
+          <span class="glpichat-invite-name" title="${sanitize(invite.guest_name || "")}">${sanitize(invite.guest_name || "")}</span>
+          <span class="glpichat-invite-email" title="${sanitize(invite.guest_email || "Sem e-mail")}">${sanitize(invite.guest_email || "Sem e-mail")}</span>
+        </div>
+        <div class="glpichat-invite-meta">
+          <span class="glpichat-badge ${badgeClass}">${statusLabelStr}</span>
+          <span class="glpichat-invite-access">Acessou: ${invite.was_accessed ? "Sim" : "Não"}</span>
+        </div>
+        <div class="glpichat-invite-actions"></div>
+      `;
+
+      const actionsDiv = card.querySelector(".glpichat-invite-actions");
+
+      // Check if this invite was just reissued
+      if (Number(invite.id) === Number(reissuedInviteId) && lastCreatedUrl) {
+        const reissueSuccess = document.createElement("div");
+        reissueSuccess.className = "glpichat-invite-success";
+        reissueSuccess.innerHTML = `
+          <div class="glpichat-invite-success-text">Novo link gerado!</div>
+          <div class="glpichat-invite-success-row">
+            <input type="text" readonly value="${sanitize(lastCreatedUrl)}">
+            <button type="button" class="glpichat-copy-btn">Copiar</button>
+          </div>
+        `;
+        const copyBtn = reissueSuccess.querySelector(".glpichat-copy-btn");
+        copyBtn.addEventListener("click", () => {
+          navigator.clipboard.writeText(lastCreatedUrl).then(() => {
+            copyBtn.textContent = "Copiado!";
+            copyBtn.classList.add("copied");
+            setTimeout(() => {
+              copyBtn.textContent = "Copiar";
+              copyBtn.classList.remove("copied");
+            }, 2000);
+          }).catch((err) => {
+            console.error("Falha ao copiar:", err);
+            alert("Por favor, copie o link manualmente.");
+          });
+        });
+        card.appendChild(reissueSuccess);
+      }
+
+      if (isActive) {
+        const reissueBtn = document.createElement("button");
+        reissueBtn.type = "button";
+        reissueBtn.textContent = "Reemitir";
+        reissueBtn.addEventListener("click", async () => {
+          const fd = new FormData();
+          fd.set("invite_id", String(invite.id));
+          fd.set("_glpi_csrf_token", state.csrf);
+          try {
+            const result = await postForm(`${pluginBase}/Invite/Reissue`, fd);
+            await refreshInvites(ticketsId, result.url, invite.id);
+          } catch (err) {
+            alert("Erro ao reemitir convite: " + err.message);
+          }
+        });
+
+        const revokeBtn = document.createElement("button");
+        revokeBtn.type = "button";
+        revokeBtn.className = "action-revoke";
+        revokeBtn.textContent = "Cancelar Convite";
+        revokeBtn.addEventListener("click", async () => {
+          if (!confirm("Deseja cancelar o acesso deste convidado?")) {
+            return;
+          }
+          const fd = new FormData();
+          fd.set("invite_id", String(invite.id));
+          fd.set("_glpi_csrf_token", state.csrf);
+          try {
+            await postForm(`${pluginBase}/Invite/Revoke`, fd);
+            await refreshInvites(ticketsId);
+          } catch (err) {
+            alert("Erro ao cancelar convite: " + err.message);
+          }
+        });
+
+        actionsDiv.append(reissueBtn, revokeBtn);
+      } else if (isExpired || isRevoked) {
+        const reissueBtn = document.createElement("button");
+        reissueBtn.type = "button";
+        reissueBtn.textContent = "Reemitir";
+        reissueBtn.addEventListener("click", async () => {
+          const fd = new FormData();
+          fd.set("invite_id", String(invite.id));
+          fd.set("_glpi_csrf_token", state.csrf);
+          try {
+            const result = await postForm(`${pluginBase}/Invite/Reissue`, fd);
+            await refreshInvites(ticketsId, result.url, invite.id);
+          } catch (err) {
+            alert("Erro ao reemitir convite: " + err.message);
+          }
+        });
+        actionsDiv.appendChild(reissueBtn);
+      } else if (isAccepted) {
+        // No action buttons for accepted invites
+      }
+
+      listContainer.appendChild(card);
+    }
+
+    ui.launcherInvites.appendChild(listContainer);
   };
 
   const mountInviteManagement = async (container) => {

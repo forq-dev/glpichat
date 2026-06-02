@@ -132,8 +132,16 @@ final class GuestController extends AbstractController
 
     private function guestHtml(int $tickets_id, int $rooms_id, string $guest_name): string
     {
+        global $CFG_GLPI;
+        $url_path = parse_url($CFG_GLPI['url_base'] ?? '', PHP_URL_PATH) ?? '';
+        $url_path = rtrim($url_path, '/');
+
+        $plugin_dir = dirname(__DIR__, 2);
+        $css_version = file_exists($plugin_dir . '/public/css/glpichat.css') ? filemtime($plugin_dir . '/public/css/glpichat.css') : time();
+        $js_version = file_exists($plugin_dir . '/public/js/glpichat.js') ? filemtime($plugin_dir . '/public/js/glpichat.js') : time();
+
         return '<!doctype html><html><head><meta charset="utf-8"><title>GLPI Chat</title>'
-            . '<link rel="stylesheet" href="../public/css/glpichat.css">'
+            . '<link rel="stylesheet" href="' . $url_path . '/plugins/glpichat/public/css/glpichat.css?v=' . $css_version . '">'
             . '<meta name="viewport" content="width=device-width, initial-scale=1.0">'
             . '</head><body class="glpichat-guest-page">'
             . '<main class="glpichat glpichat-guest" data-ticket-id="' . htmlescape((string) $tickets_id) . '" data-room-id="' . htmlescape((string) $rooms_id) . '" data-guest="1">'
@@ -160,6 +168,6 @@ final class GuestController extends AbstractController
             . '    </button>'
             . '  </form>'
             . '</div>'
-            . '</main><script src="../public/js/glpichat.js"></script></body></html>';
+            . '</main><script src="' . $url_path . '/plugins/glpichat/public/js/glpichat.js?v=' . $js_version . '"></script></body></html>';
     }
 }

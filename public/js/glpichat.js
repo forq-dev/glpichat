@@ -1651,6 +1651,7 @@
     if (form) {
       const textarea = form.querySelector("textarea");
       const fileInput = form.querySelector("input[type='file']");
+      const panel = guestRoot.querySelector(".glpichat-chatbox-panel");
 
       if (textarea && fileInput) {
         // Ctrl+V paste support for guest
@@ -1659,6 +1660,29 @@
             fileInput.files = e.clipboardData.files;
             form.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
             e.preventDefault();
+          }
+        });
+      }
+
+      if (panel && fileInput) {
+        panel.addEventListener("dragover", (e) => {
+          e.preventDefault();
+          panel.classList.add("drag-over");
+        });
+
+        panel.addEventListener("dragleave", (e) => {
+          if (e.relatedTarget && panel.contains(e.relatedTarget)) {
+            return;
+          }
+          panel.classList.remove("drag-over");
+        });
+
+        panel.addEventListener("drop", (e) => {
+          e.preventDefault();
+          panel.classList.remove("drag-over");
+          if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            fileInput.files = e.dataTransfer.files;
+            form.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
           }
         });
       }

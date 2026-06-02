@@ -37,6 +37,34 @@ function glpichat_right_names(): array
     ];
 }
 
+function glpichat_add_profile_rights(): void
+{
+    global $DB, $GLPI_CACHE;
+
+    $GLPI_CACHE->set('all_possible_rights', []);
+    $profiles = $DB->request([
+        'SELECT' => ['id'],
+        'FROM' => Profile::getTable(),
+    ]);
+
+    foreach ($profiles as $profile) {
+        $profiles_id = (int) ($profile['id'] ?? 0);
+        if ($profiles_id <= 0) {
+            continue;
+        }
+
+        foreach (glpichat_right_names() as $name) {
+            $DB->updateOrInsert(ProfileRight::getTable(), [
+                'profiles_id' => $profiles_id,
+                'name' => $name,
+            ], [
+                'profiles_id' => $profiles_id,
+                'name' => $name,
+            ]);
+        }
+    }
+}
+
 function glpichat_schema_queries(): array
 {
     $options = 'ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci ROW_FORMAT=DYNAMIC';
@@ -400,6 +428,376 @@ function glpichat_record_event(
     return $event_id;
 }
 
+function glpichat_raise_message_notification_event(
+    int $tickets_id,
+    string $room_type,
+    string $actor_type,
+    int $users_id,
+    string $content
+): void {
+    $ticket = glpichat_ticket_or_fail($tickets_id);
+
+    $event = match (true) {
+        $actor_type === GLPICHAT_ACTOR_GUEST => 'glpichat_guest_message',
+        $room_type === GLPICHAT_ROOM_INTERNAL => 'glpichat_internal_message',
+        default => 'glpichat_public_message',
+    };
+
+    $options = [
+        'glpichat_room_type' => $room_type,
+        'glpichat_actor_type' => $actor_type,
+        'glpichat_users_id' => $users_id,
+        'glpichat_content' => $content,
+    ];
+
+    if (!NotificationEvent::raiseEvent($event, $ticket, $options)) {
+        throw new RuntimeException(sprintf('Unable to raise GLPI notification event "%s".', $event));
+    }
+}
+
+function glpichat_default_notification_template_name(): string
+{
+    return 'GLPI CHAT - Layout padrao';
+}
+
+function glpichat_default_notification_definition_name(string $event): string
+{
+    return match ($event) {
+        'glpichat_public_message' => 'GLPI CHAT - Notificacao solicitante',
+        'glpichat_internal_message' => 'GLPI CHAT - Notificacao interna',
+        'glpichat_guest_message' => 'GLPI CHAT - Notificacao convidado',
+        default => 'GLPI CHAT - Notificacao chat',
+    };
+}
+
+function glpichat_default_notification_events(): array
+{
+    return [
+        'glpichat_public_message',
+        'glpichat_internal_message',
+        'glpichat_guest_message',
+    ];
+}
+
+function glpichat_default_template_subject(): string
+{
+    return '##glpichat.ticket_label##';
+}
+
+function glpichat_default_template_text(): string
+{
+    return "##glpichat.ticket_label##\n##glpichat.sender_name##: ##glpichat.message_preview## ##glpichat.unread_badge##";
+}
+
+function glpichat_default_template_html(): string
+{
+    return '<p><strong>##glpichat.ticket_label##</strong></p><p>##glpichat.sender_name##: ##glpichat.message_preview## ##glpichat.unread_badge##</p>';
+}
+
+function glpichat_install_default_notifications(): void
+{
+    $template_id = glpichat_ensure_default_notification_template();
+    foreach (glpichat_default_notification_events() as $event) {
+        glpichat_ensure_default_notification_definition($template_id, $event);
+    }
+}
+
+function glpichat_bootstrap_default_notifications_once(): void
+{
+    $is_bootstrapped = (string) Config::getConfigurationValue('plugin:glpichat', 'default_notifications_bootstrapped');
+    if ($is_bootstrapped === '1') {
+        return;
+    }
+
+    glpichat_install_default_notifications();
+    Config::setConfigurationValues('plugin:glpichat', [
+        'default_notifications_bootstrapped' => '1',
+    ]);
+}
+
+function glpichat_ensure_default_notification_template(): int
+{
+    $template = new NotificationTemplate();
+    $existing = $template->find([
+        'name' => glpichat_default_notification_template_name(),
+        'itemtype' => Ticket::class,
+    ]);
+
+    if (is_array($existing) && count($existing) > 0) {
+        $row = reset($existing);
+        $template_id = (int) ($row['id'] ?? 0);
+        if ($template_id <= 0) {
+            throw new RuntimeException('Invalid existing notification template id.');
+        }
+        glpichat_upsert_notification_template_translation($template_id);
+        return $template_id;
+    }
+
+    $template_id = (int) $template->add([
+        'name' => glpichat_default_notification_template_name(),
+        'itemtype' => Ticket::class,
+        'comment' => 'Default GLPI Chat notification template',
+    ]);
+    if ($template_id <= 0) {
+        throw new RuntimeException('Unable to create default GLPI Chat notification template.');
+    }
+
+    glpichat_upsert_notification_template_translation($template_id);
+    return $template_id;
+}
+
+function glpichat_upsert_notification_template_translation(int $template_id): void
+{
+    $translation = new NotificationTemplateTranslation();
+    $existing = $translation->find([
+        'notificationtemplates_id' => $template_id,
+        'language' => '',
+    ]);
+
+    $input = [
+        'notificationtemplates_id' => $template_id,
+        'language' => '',
+        'subject' => glpichat_default_template_subject(),
+        'content_text' => glpichat_default_template_text(),
+        'content_html' => glpichat_default_template_html(),
+    ];
+
+    if (is_array($existing) && count($existing) > 0) {
+        $row = reset($existing);
+        $translation_id = (int) ($row['id'] ?? 0);
+        if ($translation_id <= 0) {
+            throw new RuntimeException('Invalid existing notification template translation id.');
+        }
+        $input['id'] = $translation_id;
+        if (!$translation->update($input)) {
+            throw new RuntimeException('Unable to update default GLPI Chat template translation.');
+        }
+        return;
+    }
+
+    $translation_id = (int) $translation->add($input);
+    if ($translation_id <= 0) {
+        throw new RuntimeException('Unable to create default GLPI Chat template translation.');
+    }
+}
+
+function glpichat_ensure_default_notification_definition(int $template_id, string $event): void
+{
+    $notification = new Notification();
+    $definition_name = glpichat_default_notification_definition_name($event);
+    $existing = $notification->find([
+        'name' => $definition_name,
+        'itemtype' => Ticket::class,
+        'event' => $event,
+        'entities_id' => 0,
+    ]);
+
+    if (is_array($existing) && count($existing) > 0) {
+        $row = reset($existing);
+        $notification_id = (int) ($row['id'] ?? 0);
+        if ($notification_id <= 0) {
+            throw new RuntimeException('Invalid existing notification definition id.');
+        }
+    } else {
+        $notification_id = (int) $notification->add([
+            'name' => $definition_name,
+            'entities_id' => 0,
+            'itemtype' => Ticket::class,
+            'event' => $event,
+            'is_recursive' => 1,
+            'is_active' => 1,
+            'comment' => 'Default GLPI Chat notification definition',
+        ]);
+        if ($notification_id <= 0) {
+            throw new RuntimeException(sprintf('Unable to create notification definition for event "%s".', $event));
+        }
+    }
+
+    glpichat_ensure_notification_mode($notification_id, $template_id, Notification_NotificationTemplate::MODE_AJAX);
+    glpichat_ensure_default_notification_targets($notification_id);
+}
+
+function glpichat_ensure_notification_mode(int $notification_id, int $template_id, string $mode): void
+{
+    $relation = new Notification_NotificationTemplate();
+    $existing = $relation->find([
+        'notifications_id' => $notification_id,
+        'mode' => $mode,
+    ]);
+
+    if (is_array($existing) && count($existing) > 0) {
+        $row = reset($existing);
+        $relation_id = (int) ($row['id'] ?? 0);
+        if ($relation_id <= 0) {
+            throw new RuntimeException('Invalid existing notification/template relation id.');
+        }
+        if ((int) ($row['notificationtemplates_id'] ?? 0) !== $template_id) {
+            if (!$relation->update([
+                'id' => $relation_id,
+                'notifications_id' => $notification_id,
+                'notificationtemplates_id' => $template_id,
+                'mode' => $mode,
+            ])) {
+                throw new RuntimeException('Unable to update notification/template relation.');
+            }
+        }
+        return;
+    }
+
+    $relation_id = (int) $relation->add([
+        'notifications_id' => $notification_id,
+        'notificationtemplates_id' => $template_id,
+        'mode' => $mode,
+    ]);
+    if ($relation_id <= 0) {
+        throw new RuntimeException('Unable to create notification/template relation.');
+    }
+}
+
+function glpichat_ensure_default_notification_targets(int $notification_id): void
+{
+    $target = new NotificationTarget();
+    $default_targets = [
+        Notification::ASSIGN_TECH,
+        Notification::ASSIGN_GROUP,
+        Notification::OBSERVER,
+        Notification::OBSERVER_GROUP,
+    ];
+
+    foreach ($default_targets as $items_id) {
+        $existing = $target->find([
+            'notifications_id' => $notification_id,
+            'type' => Notification::USER_TYPE,
+            'items_id' => $items_id,
+            'is_exclusion' => 0,
+        ]);
+        if (is_array($existing) && count($existing) > 0) {
+            continue;
+        }
+        $target_id = (int) $target->add([
+            'notifications_id' => $notification_id,
+            'type' => Notification::USER_TYPE,
+            'items_id' => $items_id,
+            'is_exclusion' => 0,
+        ]);
+        if ($target_id <= 0) {
+            throw new RuntimeException(sprintf('Unable to add default notification target (%d).', $items_id));
+        }
+    }
+}
+
+function glpichat_latest_message_for_ticket(int $tickets_id): array
+{
+    global $DB;
+
+    $row = $DB->request([
+        'SELECT' => [
+            'm.id',
+            'm.content',
+            'm.participant_type',
+            'm.users_id',
+            'm.participants_id',
+        ],
+        'FROM' => ['m' => 'glpi_plugin_glpichat_messages'],
+        'WHERE' => ['m.tickets_id' => $tickets_id],
+        'ORDER' => ['m.id DESC'],
+        'LIMIT' => 1,
+    ])->current();
+
+    if (!is_array($row)) {
+        return [
+            'sender_name' => 'Sistema',
+            'preview' => 'Nova mensagem no chat',
+        ];
+    }
+
+    $sender_name = 'Sistema';
+    $actor_type = (string) ($row['participant_type'] ?? '');
+    $users_id = (int) ($row['users_id'] ?? 0);
+    $participants_id = (int) ($row['participants_id'] ?? 0);
+
+    if ($actor_type === GLPICHAT_ACTOR_USER && $users_id > 0) {
+        $sender_name = getUserName($users_id) ?: ('Usuario #' . $users_id);
+    } elseif ($actor_type === GLPICHAT_ACTOR_GUEST && $participants_id > 0) {
+        $participant = $DB->request([
+            'FROM' => 'glpi_plugin_glpichat_participants',
+            'WHERE' => ['id' => $participants_id],
+            'LIMIT' => 1,
+        ])->current();
+        $sender_name = is_array($participant) && !empty($participant['guest_name'])
+            ? (string) $participant['guest_name']
+            : ('Convidado #' . $participants_id);
+    }
+
+    $content = trim((string) ($row['content'] ?? ''));
+    if ($content === '') {
+        $content = 'Nova mensagem no chat';
+    }
+    if (strlen($content) > 180) {
+        $content = substr($content, 0, 177) . '...';
+    }
+
+    return [
+        'sender_name' => $sender_name,
+        'preview' => $content,
+    ];
+}
+
+function glpichat_unread_count_for_user_ticket(int $users_id, int $tickets_id): int
+{
+    global $DB;
+
+    $participants = $DB->request([
+        'SELECT' => ['p.id', 'p.rooms_id'],
+        'FROM' => ['p' => 'glpi_plugin_glpichat_participants'],
+        'INNER JOIN' => [
+            'glpi_plugin_glpichat_rooms' => [
+                'ON' => [
+                    'glpi_plugin_glpichat_rooms' => 'id',
+                    'p' => 'rooms_id',
+                ],
+            ],
+        ],
+        'WHERE' => [
+            'p.users_id' => $users_id,
+            'p.participant_type' => GLPICHAT_ACTOR_USER,
+            'p.left_at' => null,
+            'glpi_plugin_glpichat_rooms.tickets_id' => $tickets_id,
+        ],
+    ]);
+
+    $total_unread = 0;
+    foreach ($participants as $participant) {
+        $rooms_id = (int) ($participant['rooms_id'] ?? 0);
+        $participants_id = (int) ($participant['id'] ?? 0);
+        if ($rooms_id <= 0 || $participants_id <= 0) {
+            continue;
+        }
+        $total_unread += glpichat_unread_count_fast($rooms_id, $participants_id);
+    }
+
+    if ($total_unread > 0) {
+        return $total_unread;
+    }
+
+    $fallback = $DB->request([
+        'SELECT' => ['COUNT' => 'cpt'],
+        'FROM' => 'glpi_plugin_glpichat_messages',
+        'WHERE' => ['tickets_id' => $tickets_id],
+    ])->current();
+
+    return (int) ($fallback['cpt'] ?? 0);
+}
+
+function glpichat_display_unread_count(int $raw_unread): int
+{
+    if ($raw_unread <= 1) {
+        return 0;
+    }
+
+    return $raw_unread;
+}
+
 function glpichat_add_message(
     int $tickets_id,
     string $room_type,
@@ -436,6 +834,8 @@ function glpichat_add_message(
         'documents_id' => $documents_id,
         'itilfollowups_id' => $itilfollowups_id,
     ]);
+
+    glpichat_raise_message_notification_event($tickets_id, $room_type, $actor_type, $users_id, $content);
 
     return $message_id;
 }

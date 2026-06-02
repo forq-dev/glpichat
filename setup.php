@@ -22,6 +22,8 @@ function plugin_init_glpichat(): void
     $PLUGIN_HOOKS['add_css']['glpichat'] = ['public/css/glpichat.css'];
     $PLUGIN_HOOKS['add_javascript']['glpichat'] = ['public/js/glpichat.js'];
     $PLUGIN_HOOKS[Hooks::ITEM_ADD]['glpichat'] = [HookHandler::class, 'itemAdd'];
+    $PLUGIN_HOOKS[Hooks::ITEM_GET_EVENTS]['glpichat'] = [NotificationTargetTicket::class => [HookHandler::class, 'itemGetEvents']];
+    $PLUGIN_HOOKS[Hooks::ITEM_GET_DATA]['glpichat'] = [NotificationTargetTicket::class => [HookHandler::class, 'itemGetDatas']];
 
     Plugin::registerClass(TicketTab::class, ['addtabon' => Ticket::class]);
     Plugin::registerClass(ProfileTab::class, ['addtabon' => Profile::class]);

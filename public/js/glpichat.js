@@ -40,6 +40,14 @@
   const maxOpenChats = () => (window.innerWidth <= 980 ? MOBILE_MAX_OPEN : DESKTOP_MAX_OPEN);
   const SAFE_BOTTOM_MARGIN_PX = 8;
 
+  const submitForm = (form) => {
+    if (typeof form.requestSubmit === "function") {
+      form.requestSubmit();
+    } else {
+      form.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+    }
+  };
+
   const isVisibleElement = (element) => {
     const style = window.getComputedStyle(element);
     if (style.display === "none" || style.visibility === "hidden") {
@@ -556,7 +564,7 @@
       panel.classList.remove("drag-over");
       if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
         fileInput.files = e.dataTransfer.files;
-        sendForm.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+        submitForm(sendForm);
       }
     });
 
@@ -564,8 +572,16 @@
     textarea.addEventListener("paste", (e) => {
       if (e.clipboardData && e.clipboardData.files && e.clipboardData.files.length > 0) {
         fileInput.files = e.clipboardData.files;
-        sendForm.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+        submitForm(sendForm);
         e.preventDefault();
+      }
+    });
+
+    // Enter to send, Shift+Enter for newline
+    textarea.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        submitForm(sendForm);
       }
     });
 
@@ -576,7 +592,7 @@
         return;
       }
       const activeRoom = ticket.activeTab;
-      const fd = new FormData(event.currentTarget);
+      const fd = new FormData(sendForm);
       const content = String(fd.get("content") || "").trim();
       const file = fd.get("file");
       fd.set("tickets_id", String(ticketId));
@@ -1682,8 +1698,16 @@
         textarea.addEventListener("paste", (e) => {
           if (e.clipboardData && e.clipboardData.files && e.clipboardData.files.length > 0) {
             fileInput.files = e.clipboardData.files;
-            form.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+            submitForm(form);
             e.preventDefault();
+          }
+        });
+
+        // Enter to send, Shift+Enter for newline
+        textarea.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            submitForm(form);
           }
         });
       }
@@ -1706,7 +1730,7 @@
           panel.classList.remove("drag-over");
           if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
             fileInput.files = e.dataTransfer.files;
-            form.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+            submitForm(form);
           }
         });
       }

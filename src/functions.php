@@ -164,16 +164,75 @@ function glpichat_add_indexes(Migration $migration): void
     $migration->addKey('glpi_plugin_glpichat_messages', ['participants_id', 'id'], 'messages_participant_id');
     $migration->addKey('glpi_plugin_glpichat_events', ['rooms_id', 'id'], 'events_room_id');
     $migration->addKey('glpi_plugin_glpichat_events', ['tickets_id', 'id'], 'events_ticket_id');
-    $migration->addKey('glpi_plugin_glpichat_participants', ['rooms_id', 'users_id'], 'participants_room_user');
+    glpichat_drop_mismatched_participants_room_user_index(['users_id', 'rooms_id']);
+    $migration->addKey('glpi_plugin_glpichat_participants', ['users_id', 'rooms_id'], 'participants_room_user');
     $migration->addKey('glpi_plugin_glpichat_participants', 'session_token_hash', 'participants_session');
     $migration->addKey('glpi_plugin_glpichat_readstates', ['participants_id', 'rooms_id'], 'readstates_participant_room');
     $migration->addKey('glpi_plugin_glpichat_invites', 'expires_at', 'invites_expires_at');
     $migration->addKey('glpi_plugin_glpichat_auditlogs', ['tickets_id', 'date_creation'], 'audit_ticket_date');
 }
 
+function glpichat_drop_mismatched_participants_room_user_index(array $expected_columns): void
+{
+    global $DB;
+
+    $table = 'glpi_plugin_glpichat_participants';
+    $index = 'participants_room_user';
+    if (!$DB->tableExists($table) || !isIndex($table, $index)) {
+        return;
+    }
+
+    $columns = glpichat_index_columns($table, $index);
+    if ($columns === $expected_columns) {
+        return;
+    }
+
+    $DB->doQuery(sprintf(
+        'ALTER TABLE %s DROP INDEX %s',
+        $DB::quoteName($table),
+        $DB::quoteName($index)
+    ));
+}
+
+function glpichat_index_columns(string $table, string $index): array
+{
+    global $DB;
+
+    $result = $DB->doQuery(sprintf('SHOW INDEX FROM %s', $DB::quoteName($table)));
+    if (!$result) {
+        throw new RuntimeException(sprintf('Failed to inspect index "%s" on table "%s".', $index, $table));
+    }
+
+    $indexed_columns = [];
+    while ($row = $DB->fetchAssoc($result)) {
+        if (($row['Key_name'] ?? null) !== $index) {
+            continue;
+        }
+
+        $sequence = (int) ($row['Seq_in_index'] ?? 0);
+        if ($sequence <= 0) {
+            throw new RuntimeException(sprintf('Invalid sequence metadata for index "%s" on table "%s".', $index, $table));
+        }
+
+        $column = $row['Column_name'] ?? null;
+        if (!is_string($column) || $column === '') {
+            throw new RuntimeException(sprintf('Invalid column metadata for index "%s" on table "%s".', $index, $table));
+        }
+
+        $indexed_columns[$sequence] = $column;
+    }
+
+    ksort($indexed_columns);
+
+    return array_values($indexed_columns);
+}
+
 function glpichat_require_logged_csrf(array $input): void
 {
     Session::checkLoginUser();
+    if (!Session::validateCSRF($input)) {
+        throw new RuntimeException('Invalid CSRF token.');
+    }
 }
 
 function glpichat_current_user_id(): int
@@ -1503,22 +1562,52 @@ function glpichat_reissue_invite(int $invite_id): array
 
 function glpichat_upload_document(int $tickets_id, UploadedFile $file, bool $suppress_document_hook): int
 {
+    global $CFG_GLPI;
+
     $original_name = $file->getClientOriginalName();
+    $uploadable_pattern = DocumentType::getUploadableFilePattern();
+    if ($uploadable_pattern === '' || preg_match($uploadable_pattern, $original_name) !== 1) {
+        throw new RuntimeException('The uploaded file type is not allowed by GLPI.');
+    }
+
+    $file_size = (int) $file->getSize();
+    $glpi_max_size = (int) ($CFG_GLPI['document_max_size'] ?? 0) * 1024 * 1024;
+    if ($glpi_max_size > 0 && $file_size > $glpi_max_size) {
+        throw new RuntimeException('The uploaded file exceeds the GLPI document size limit.');
+    }
+
+    $php_max_size = Toolbox::getPhpUploadSizeLimit();
+    if ($php_max_size > 0 && $file_size > $php_max_size) {
+        throw new RuntimeException('The uploaded file exceeds the PHP upload size limit.');
+    }
+
     $safe_name = bin2hex(random_bytes(8)) . '_' . preg_replace('/[^A-Za-z0-9_.-]/', '_', $original_name);
     $file->move(GLPI_UPLOAD_DIR, $safe_name);
+    $stored_path = rtrim(GLPI_UPLOAD_DIR, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $safe_name;
 
-    $document = new Document();
-    $GLOBALS['GLPICHAT_SUPPRESS_DOCUMENT_HOOK'] = $suppress_document_hook;
-    $id = $document->add([
-        'itemtype' => Ticket::class,
-        'items_id' => $tickets_id,
-        'name' => $original_name,
-        'upload_file' => $safe_name,
-        '_only_if_upload_succeed' => 1,
-    ]);
+    try {
+        $document = new Document();
+        $GLOBALS['GLPICHAT_SUPPRESS_DOCUMENT_HOOK'] = $suppress_document_hook;
+        $id = $document->add([
+            'itemtype' => Ticket::class,
+            'items_id' => $tickets_id,
+            'name' => $original_name,
+            'upload_file' => $safe_name,
+            '_only_if_upload_succeed' => 1,
+        ]);
+    } catch (\Throwable $error) {
+        $GLOBALS['GLPICHAT_SUPPRESS_DOCUMENT_HOOK'] = false;
+        if (is_file($stored_path) && !unlink($stored_path)) {
+            throw new RuntimeException('Unable to remove orphaned upload file after document creation failure.', 0, $error);
+        }
+        throw $error;
+    }
     $GLOBALS['GLPICHAT_SUPPRESS_DOCUMENT_HOOK'] = false;
 
     if (!$id) {
+        if (is_file($stored_path) && !unlink($stored_path)) {
+            throw new RuntimeException('Unable to remove orphaned upload file after document creation failure.');
+        }
         throw new RuntimeException('Unable to create GLPI document.');
     }
 

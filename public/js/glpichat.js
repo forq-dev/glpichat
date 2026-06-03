@@ -9,6 +9,21 @@
   const DESKTOP_MAX_OPEN = 3;
   const MOBILE_MAX_OPEN = 1;
 
+  const VALID_POSITIONS = ["bottom-right", "bottom-left", "top-left", "top-right"];
+
+  const throttle = (func, limit) => {
+    let inThrottle;
+    return function() {
+      const args = arguments;
+      const context = this;
+      if (!inThrottle) {
+        func.apply(context, args);
+        inThrottle = true;
+        setTimeout(() => inThrottle = false, limit);
+      }
+    };
+  };
+
   const state = {
     csrf: "",
     currentUserId: 0,
@@ -25,6 +40,8 @@
     transientTicketIds: new Set(),
     minimizedSnapshot: null,
     pendingMutations: 0,
+    widgetPosition: "bottom-right",
+    isDragging: false,
   };
 
   const ui = {
@@ -34,6 +51,12 @@
     launcherNotifications: null,
     launcherInvites: null,
     dock: null,
+  };
+
+  let obstructionElements = [];
+  const updateObstructionElementsCache = () => {
+    if (!document.body) return;
+    obstructionElements = Array.from(document.body.querySelectorAll("header, footer, nav, .navbar, .fixed-top, .fixed-bottom, .sticky-top"));
   };
 
   const channelKey = (ticketsId, roomType) => `${ticketsId}:${roomType}`;
@@ -60,9 +83,8 @@
     const viewportHeight = window.innerHeight || 0;
     const viewportWidth = window.innerWidth || 0;
     let maxObstruction = 0;
-    const elements = document.body ? Array.from(document.body.querySelectorAll("*")) : [];
 
-    for (const element of elements) {
+    for (const element of obstructionElements) {
       if (!(element instanceof HTMLElement)) {
         continue;
       }
@@ -98,10 +120,83 @@
     return maxObstruction;
   };
 
+  const detectTopObstruction = () => {
+    const viewportWidth = window.innerWidth || 0;
+    let maxObstruction = 0;
+
+    for (const element of obstructionElements) {
+      if (!(element instanceof HTMLElement)) {
+        continue;
+      }
+      if (element.classList.contains("glpichat-widget") || element.closest(".glpichat-widget")) {
+        continue;
+      }
+      const style = window.getComputedStyle(element);
+      if (style.position !== "fixed" && style.position !== "sticky") {
+        continue;
+      }
+      if (!isVisibleElement(element)) {
+        continue;
+      }
+      const rect = element.getBoundingClientRect();
+      if (rect.height <= 0 || rect.width <= 0) {
+        continue;
+      }
+      if (rect.top > 2) {
+        continue;
+      }
+      if (rect.width < Math.min(220, viewportWidth * 0.2)) {
+        continue;
+      }
+      const obstruction = Math.max(0, rect.bottom);
+      if (obstruction > maxObstruction) {
+        maxObstruction = obstruction;
+      }
+    }
+
+    return maxObstruction;
+  };
+
   const updateSafeBottom = () => {
     const obstruction = detectBottomObstruction();
     const safeBottom = Math.max(0, obstruction) + SAFE_BOTTOM_MARGIN_PX;
     document.documentElement.style.setProperty("--glpichat-safe-bottom", `${safeBottom}px`);
+
+    const topObstruction = detectTopObstruction();
+    const safeTop = Math.max(0, topObstruction) + SAFE_BOTTOM_MARGIN_PX;
+    document.documentElement.style.setProperty("--glpichat-safe-top", `${safeTop}px`);
+  };
+
+  const isLeftPosition = () => state.widgetPosition === "bottom-left" || state.widgetPosition === "top-left";
+
+  const insertBoxInDock = (box) => {
+    if (isLeftPosition()) {
+      // Left positions: launcher is at the start (visually left due to row-reverse),
+      // insert box before the launcher so it appears to its right
+      ui.dock.insertBefore(box, ui.launcher);
+    } else {
+      // Right positions: launcher is at the end, insert box before launcher
+      ui.dock.insertBefore(box, ui.launcher);
+    }
+    // Force layout reflow so the browser registers the box placement in the DOM
+    void box.offsetHeight;
+  };
+
+  const applyWidgetPosition = (position) => {
+    if (!VALID_POSITIONS.includes(position)) {
+      position = "bottom-right";
+    }
+    state.widgetPosition = position;
+    if (ui.root) {
+      for (const pos of VALID_POSITIONS) {
+        ui.root.classList.remove(`pos-${pos}`);
+      }
+      ui.root.classList.add(`pos-${position}`);
+    }
+  };
+
+  const cycleWidgetPosition = () => {
+    // Deprecated. Function removed.
   };
 
   const animatePanelClose = (panel, callback) => {
@@ -109,16 +204,37 @@
       callback();
       return;
     }
+    
+    if (panel._cancelClose) {
+      panel._cancelClose();
+    }
+    
     panel.classList.add("is-closing");
-    const onEnd = () => {
+    
+    let called = false;
+    let timeoutId = null;
+    
+    const onEnd = (e) => {
+      if (e && e.target !== panel) return; // Prevent bubbling events from children
+      if (called) return;
+      called = true;
+      cleanup();
+      callback();
+    };
+    
+    const cleanup = () => {
+      if (timeoutId) clearTimeout(timeoutId);
       panel.classList.remove("is-closing");
       panel.removeEventListener("animationend", onEnd);
       panel.removeEventListener("transitionend", onEnd);
-      callback();
+      delete panel._cancelClose;
     };
+    
+    panel._cancelClose = cleanup;
+    
     panel.addEventListener("animationend", onEnd);
     panel.addEventListener("transitionend", onEnd);
-    setTimeout(onEnd, 250);
+    timeoutId = setTimeout(onEnd, 200);
   };
 
   const storageLoad = () => {
@@ -150,6 +266,9 @@
         : []
     );
     state.launcherOpen = data.launcherOpen === true;
+    if (typeof data.widgetPosition === "string" && VALID_POSITIONS.includes(data.widgetPosition)) {
+      state.widgetPosition = data.widgetPosition;
+    }
   };
 
   const saveUiState = () => {
@@ -159,6 +278,7 @@
       closedTicketIds: Array.from(state.closedTicketIds),
       manualTicketIds: Array.from(state.manualTicketIds),
       launcherOpen: state.launcherOpen,
+      widgetPosition: state.widgetPosition,
     });
   };
 
@@ -196,7 +316,9 @@
   const sanitize = (text) => String(text || "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 
   const activeTicketIdFromPage = () => {
     try {
@@ -338,7 +460,9 @@
     ui.lightbox = root.querySelector("[data-role='lightbox']");
     ui.lightboxImg = root.querySelector("[data-role='lightbox-img']");
 
-    root.querySelector("[data-role='launcher-tab']").addEventListener("click", toggleLauncher);
+    // Apply saved position
+    applyWidgetPosition(state.widgetPosition);
+
 
     root.querySelector(".glpichat-panel-head").addEventListener("click", (event) => {
       if (event.target.closest("button")) {
@@ -365,14 +489,171 @@
       }
     });
 
+    initWidgetDragAndDrop();
     updateSafeBottom();
   };
 
+  const initWidgetDragAndDrop = () => {
+    const tab = ui.root.querySelector("[data-role='launcher-tab']");
+    let isDragging = false;
+    let hasMoved = false;
+    let startX = 0, startY = 0;
+    let initialRect = null;
+    let dragTimeout = null;
+
+    const onMove = (e) => {
+      if (!isDragging) return;
+      
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      
+      const deltaX = clientX - startX;
+      const deltaY = clientY - startY;
+
+      // Only consider it a drag if moved more than 5px to avoid preventing normal clicks
+      if (!hasMoved && (Math.abs(deltaX) > 5 || Math.abs(deltaY) > 5)) {
+        hasMoved = true;
+        state.isDragging = true;
+        ui.root.classList.add("is-dragging");
+      }
+
+      if (hasMoved) {
+        ui.root.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+        e.preventDefault(); // Prevent scrolling on touch
+      }
+    };
+
+    const onEnd = (e) => {
+      if (!isDragging) return;
+      isDragging = false;
+      clearTimeout(dragTimeout);
+      
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onEnd);
+      window.removeEventListener("touchmove", onMove, { passive: false });
+      window.removeEventListener("touchend", onEnd);
+
+      if (!hasMoved) {
+        // It was a click
+        toggleLauncher();
+        return;
+      }
+      
+      // Calculate closest corner (FLIP animation)
+      const currentRect = ui.root.getBoundingClientRect();
+      const centerX = currentRect.left + currentRect.width / 2;
+      const centerY = currentRect.top + currentRect.height / 2;
+      const isTop = centerY < window.innerHeight / 2;
+      const isLeft = centerX < window.innerWidth / 2;
+      
+      const newPosition = `${isTop ? 'top' : 'bottom'}-${isLeft ? 'left' : 'right'}`;
+
+      // First: get bounds before position change (with the current transform)
+      const firstRect = ui.root.getBoundingClientRect();
+      
+      // Remove temporary drag transform and state
+      ui.root.style.transform = '';
+      ui.root.classList.remove("is-dragging");
+      
+      // Change position and save
+      applyWidgetPosition(newPosition);
+      storageSave({ widgetPosition: newPosition });
+      
+      // We must reflow to get the 'Last' position accurately
+      // Ensure we re-run layout rules like dock flex-direction
+      ui.root.offsetHeight; 
+      
+      // Last: get bounds after position change
+      const lastRect = ui.root.getBoundingClientRect();
+      
+      // Invert: calculate delta
+      const deltaX = firstRect.left - lastRect.left;
+      const deltaY = firstRect.top - lastRect.top;
+      
+      // Short-circuit: if the widget didn't move far enough to change corners or position,
+      // clean up immediately to avoid transition delays
+      if (Math.abs(deltaX) < 1 && Math.abs(deltaY) < 1) {
+        ui.root.style.transform = '';
+        state.isDragging = false;
+        renderDock();
+        hasMoved = false;
+        return;
+      }
+      
+      // Apply inverted transform immediately (start position for FLIP)
+      ui.root.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+      
+      // Force repaint of the start position
+      ui.root.offsetHeight;
+      
+      // Now add transition class and animate to translate(0, 0)
+      ui.root.classList.add("glpichat-animating-position");
+      
+      // Play: animate to translate(0, 0)
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          ui.root.style.transform = 'translate(0, 0)';
+          
+          let called = false;
+          let timeoutId = null;
+          
+          const cleanup = (e) => {
+            if (e && e.target !== ui.root) return; // Prevent bubbling events from children
+            if (e && e.propertyName !== 'transform') return; // Trigger only for the transform transition
+            if (called) return;
+            called = true;
+            
+            if (timeoutId) clearTimeout(timeoutId);
+            ui.root.classList.remove("glpichat-animating-position");
+            ui.root.style.transform = '';
+            ui.root.removeEventListener("transitionend", cleanup);
+            state.isDragging = false;
+            renderDock();
+          };
+          
+          ui.root.addEventListener("transitionend", cleanup);
+          timeoutId = setTimeout(cleanup, 400); // Safety cleanup fallback
+        });
+      });
+      
+      hasMoved = false;
+    };
+
+    const onStart = (e) => {
+      // Don't drag if clicking buttons inside the tab
+      if (e.target.closest("button") && e.target !== tab && e.target.closest("button") !== tab) return;
+      if (e.button !== 0 && e.type === "mousedown") return; // Only left click
+
+      isDragging = true;
+      hasMoved = false;
+      startX = e.touches ? e.touches[0].clientX : e.clientX;
+      startY = e.touches ? e.touches[0].clientY : e.clientY;
+      initialRect = ui.root.getBoundingClientRect();
+
+      window.addEventListener("mousemove", onMove);
+      window.addEventListener("mouseup", onEnd);
+      window.addEventListener("touchmove", onMove, { passive: false });
+      window.addEventListener("touchend", onEnd);
+    };
+
+    tab.addEventListener("mousedown", onStart);
+    tab.addEventListener("touchstart", onStart, { passive: true });
+    
+    // Prevent default browser drag on the tab and its images
+    tab.addEventListener("dragstart", (e) => e.preventDefault());
+
+    // Remove the old toggle click listener from createShell
+    tab.removeEventListener("click", toggleLauncher);
+  };
+
   const minimizeLauncher = () => {
+    if (ui.launcher) {
+      ui.launcher.classList.add("is-closing");
+    }
     const performMinimize = () => {
       state.launcherOpen = false;
-      ui.launcherPanel.hidden = true;
-      ui.launcher.classList.remove("is-open");
+      if (ui.launcherPanel) ui.launcherPanel.hidden = true;
+      if (ui.launcher) ui.launcher.classList.remove("is-open", "is-closing");
       saveUiState();
     };
     animatePanelClose(ui.launcherPanel, performMinimize);
@@ -380,9 +661,16 @@
 
   const openLauncher = () => {
     state.launcherOpen = true;
-    ui.launcherPanel.hidden = false;
-    ui.launcher.classList.add("is-open");
-    ui.launcherPanel.classList.remove("is-closing");
+    if (ui.launcherPanel && ui.launcherPanel._cancelClose) {
+      ui.launcherPanel._cancelClose();
+    }
+    if (ui.launcherPanel) {
+      ui.launcherPanel.hidden = false;
+      ui.launcherPanel.classList.remove("is-closing");
+    }
+    if (ui.launcher) {
+      ui.launcher.classList.add("is-open");
+    }
     saveUiState();
     if (state.activeTicketId > 0) {
       refreshInvites(state.activeTicketId).catch(console.error);
@@ -397,11 +685,16 @@
 
     const panelsToAnimate = [];
     if (!ui.launcherPanel.hidden) {
+      if (ui.launcher) {
+        ui.launcher.classList.add("is-closing");
+      }
       panelsToAnimate.push({
         panel: ui.launcherPanel,
         cleanup: () => {
           ui.launcherPanel.hidden = true;
-          ui.launcher.classList.remove("is-open");
+          if (ui.launcher) {
+            ui.launcher.classList.remove("is-open", "is-closing");
+          }
         }
       });
     }
@@ -409,6 +702,9 @@
       const box = document.getElementById(ticketBoxId(ticketId));
       const panel = box ? box.querySelector(".glpichat-chatbox-panel") : null;
       if (panel && !panel.hidden) {
+        if (box) {
+          box.classList.add("is-closing");
+        }
         panelsToAnimate.push({
           panel,
           cleanup: () => {
@@ -528,7 +824,7 @@
       <button type="button" class="glpichat-chatbox-tab" data-role="tab"></button>
     `;
 
-    ui.dock.insertBefore(box, ui.launcher);
+    insertBoxInDock(box);
 
     box.querySelector("[data-role='tab']").addEventListener("click", () => {
       const isOpen = state.openTicketIds.includes(ticketId);
@@ -879,7 +1175,9 @@
     ensureTicketBox(ticketId);
     const box = document.getElementById(ticketBoxId(ticketId));
     if (box && ui.dock && ui.launcher) {
-      ui.dock.insertBefore(box, ui.launcher);
+      insertBoxInDock(box);
+      // Force layout reflow so the browser registers the box placement in the DOM
+      void box.offsetHeight;
     }
     state.openTicketIds = state.openTicketIds.filter((id) => id !== ticketId);
     state.openTicketIds.push(ticketId);
@@ -889,8 +1187,13 @@
     openedBox.classList.add("is-open");
     const panel = openedBox.querySelector(".glpichat-chatbox-panel");
     if (panel) {
+      if (panel._cancelClose) {
+        panel._cancelClose();
+      }
       panel.hidden = false;
       panel.classList.remove("is-closing");
+      // Force layout reflow so the browser registers the transition target states correctly
+      void panel.offsetHeight;
     }
     const ticket = state.tickets.get(ticketId);
     const activeKey = ticket ? ticket.channels[ticket.activeTab] : null;
@@ -910,10 +1213,16 @@
   const minimizeTicket = (ticketId) => {
     const box = document.getElementById(ticketBoxId(ticketId));
     const panel = box ? box.querySelector(".glpichat-chatbox-panel") : null;
+    if (box) {
+      box.classList.add("is-closing");
+    }
     const performMinimize = () => {
       if (box) {
-        box.classList.remove("is-open");
-        if (panel) panel.hidden = true;
+        box.classList.remove("is-open", "is-closing");
+        if (panel) {
+          panel.hidden = true;
+          panel.classList.remove("is-closing");
+        }
       }
       state.openTicketIds = state.openTicketIds.filter((id) => id !== ticketId);
       saveUiState();
@@ -926,6 +1235,9 @@
   const closeTicket = (ticketId) => {
     const box = document.getElementById(ticketBoxId(ticketId));
     const panel = box ? box.querySelector(".glpichat-chatbox-panel") : null;
+    if (box) {
+      box.classList.add("is-closing");
+    }
     const performClose = () => {
       if (box) box.remove();
       state.closedTicketIds.add(ticketId);
@@ -940,6 +1252,9 @@
   };
 
   const renderDock = () => {
+    if (state.isDragging || (ui.root && ui.root.classList.contains("glpichat-animating-position"))) {
+      return;
+    }
     const allTicketIds = Array.from(state.tickets.keys()).sort((a, b) => a - b);
     let dirtyUiState = false;
     const visibleSet = new Set();
@@ -1084,9 +1399,8 @@
     head.className = "glpichat-invite-head";
     head.innerHTML = `<strong>Convites para Chamado #${ticketsId}</strong>`;
 
-    const form = document.createElement("form");
+    const form = document.createElement("div");
     form.className = "glpichat-invite";
-    form.setAttribute("novalidate", "true");
     form.innerHTML = `
       <div class="glpichat-invite-field">
         <input type="text" name="guest_name" placeholder="Nome do convidado" required>
@@ -1096,7 +1410,7 @@
         <input type="email" name="guest_email" placeholder="Email do convidado (opcional)">
         <span class="glpichat-field-error" data-error-for="guest_email"></span>
       </div>
-      <button type="submit">Criar invite</button>
+      <button type="button" data-role="submit-btn">Criar invite</button>
       <div data-role="result"></div>
     `;
 
@@ -1135,21 +1449,21 @@
     emailInput.addEventListener("input", checkEmail);
     emailInput.addEventListener("blur", checkEmail);
 
-    form.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      
+    const submitInvite = async () => {
       const isNameValid = checkName();
       const isEmailValid = checkEmail();
       if (!isNameValid || !isEmailValid) {
         return;
       }
-      const submitBtn = form.querySelector("button[type='submit']");
+      const submitBtn = form.querySelector("[data-role='submit-btn']");
       if (submitBtn) {
         submitBtn.disabled = true;
         submitBtn.textContent = "Criando...";
       }
       try {
-        const fd = new FormData(form);
+        const fd = new FormData();
+        fd.set("guest_name", nameInput.value.trim());
+        fd.set("guest_email", emailInput.value.trim());
         fd.set("tickets_id", String(ticketsId));
         fd.set("_glpi_csrf_token", state.csrf);
         const created = await postForm(`${pluginBase}/Invite`, fd);
@@ -1161,7 +1475,18 @@
           submitBtn.textContent = "Criar invite";
         }
       }
-    });
+    };
+
+    form.querySelector("[data-role='submit-btn']").addEventListener("click", submitInvite);
+
+    const handleKeyPress = (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        submitInvite();
+      }
+    };
+    nameInput.addEventListener("keydown", handleKeyPress);
+    emailInput.addEventListener("keydown", handleKeyPress);
 
     ui.launcherInvites.append(head, form);
 
@@ -1752,7 +2077,7 @@
         const displayContent = hasFile ? `Enviando arquivo: ${file.name}...` : content;
         tempItem.innerHTML = `
           <div class="glpichat-message-head">Você</div>
-          <div class="glpichat-message-body">${displayContent}</div>
+          <div class="glpichat-message-body">${sanitize(displayContent)}</div>
           <div class="glpichat-message-time">Enviando...</div>
         `;
         messages.appendChild(tempItem);
@@ -1801,6 +2126,10 @@
       return;
     }
 
+    updateObstructionElementsCache();
+    // Refresh cache periodically in case other plugins dynamically inject elements
+    window.setInterval(updateObstructionElementsCache, 8000);
+
     state.activeTicketId = activeTicketIdFromPage();
     loadUiState();
     createShell();
@@ -1841,15 +2170,17 @@
 
     schedulePolling();
 
+    const throttledUpdateSafeBottom = throttle(updateSafeBottom, 150);
+
     window.addEventListener("resize", () => {
       enforceOpenLimit();
       renderDock();
-      updateSafeBottom();
+      throttledUpdateSafeBottom();
     });
 
-    window.addEventListener("scroll", updateSafeBottom, { passive: true });
+    window.addEventListener("scroll", throttledUpdateSafeBottom, { passive: true });
     document.addEventListener("visibilitychange", schedulePolling);
-    window.setInterval(updateSafeBottom, 1500);
+    window.setInterval(throttledUpdateSafeBottom, 2000);
   };
 
   const bootWidget = () => {

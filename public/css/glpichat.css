@@ -22,12 +22,211 @@
 
 .glpichat-widget {
   position: fixed;
-  right: 8px;
-  bottom: calc(var(--glpichat-safe-bottom, 0px) + var(--glpichat-bottom-offset));
   z-index: 1400;
   width: auto;
   font-family: inherit;
 }
+
+/* --- Widget Corner Positioning --- */
+.glpichat-widget.pos-bottom-right {
+  right: 8px;
+  bottom: calc(var(--glpichat-safe-bottom, 0px) + var(--glpichat-bottom-offset));
+  left: auto;
+  top: auto;
+}
+
+.glpichat-widget.pos-bottom-left {
+  left: 8px;
+  bottom: calc(var(--glpichat-safe-bottom, 0px) + var(--glpichat-bottom-offset));
+  right: auto;
+  top: auto;
+}
+
+.glpichat-widget.pos-top-right {
+  right: 8px;
+  top: calc(var(--glpichat-safe-top, 12px));
+  left: auto;
+  bottom: auto;
+}
+
+.glpichat-widget.pos-top-left {
+  left: 8px;
+  top: calc(var(--glpichat-safe-top, 12px));
+  right: auto;
+  bottom: auto;
+}
+
+/* Dock direction: left positions reverse so launcher stays on the left edge */
+.glpichat-widget.pos-bottom-left .glpichat-dock,
+.glpichat-widget.pos-top-left .glpichat-dock {
+  flex-direction: row-reverse;
+}
+
+/* Top positions: dock aligns to top */
+.glpichat-widget.pos-top-right .glpichat-dock,
+.glpichat-widget.pos-top-left .glpichat-dock {
+  align-items: flex-start;
+}
+
+/* Panels: left positions anchor to left */
+.glpichat-widget.pos-bottom-left .glpichat-chatbox-panel,
+.glpichat-widget.pos-top-left .glpichat-chatbox-panel {
+  right: auto;
+  left: 0;
+}
+
+.glpichat-widget.pos-bottom-left .glpichat-chatbox:not(.glpichat-launcher).is-open .glpichat-chatbox-panel,
+.glpichat-widget.pos-top-left .glpichat-chatbox:not(.glpichat-launcher).is-open .glpichat-chatbox-panel {
+  right: auto;
+  left: 0;
+}
+
+.glpichat-widget.pos-bottom-left .glpichat-launcher .glpichat-chatbox-panel,
+.glpichat-widget.pos-top-left .glpichat-launcher .glpichat-chatbox-panel {
+  right: auto;
+  left: 0;
+}
+
+.glpichat-widget.pos-bottom-left .glpichat-launcher.is-open .glpichat-chatbox-panel,
+.glpichat-widget.pos-top-left .glpichat-launcher.is-open .glpichat-chatbox-panel {
+  right: auto;
+  left: 0;
+}
+
+/* Panels: top positions open downwards */
+.glpichat-widget.pos-top-right .glpichat-chatbox-panel,
+.glpichat-widget.pos-top-left .glpichat-chatbox-panel {
+  bottom: auto;
+  top: var(--glpichat-panel-bottom-offset);
+  border-radius: 12px;
+}
+
+
+
+.glpichat-widget.pos-top-right .glpichat-launcher .glpichat-chatbox-panel,
+.glpichat-widget.pos-top-left .glpichat-launcher .glpichat-chatbox-panel {
+  bottom: auto;
+  top: var(--glpichat-panel-bottom-offset);
+  border-radius: 12px;
+}
+
+.glpichat-widget.pos-top-right .glpichat-launcher.is-open .glpichat-chatbox-panel,
+.glpichat-widget.pos-top-left .glpichat-launcher.is-open .glpichat-chatbox-panel {
+  bottom: auto;
+  top: var(--glpichat-panel-bottom-offset);
+  border-radius: 12px;
+}
+
+/* Top positions: tabs have inverted border-radius */
+.glpichat-widget.pos-top-right .glpichat-chatbox:not(.glpichat-launcher) .glpichat-chatbox-tab,
+.glpichat-widget.pos-top-left .glpichat-chatbox:not(.glpichat-launcher) .glpichat-chatbox-tab {
+  border-radius: 0 0 10px 10px;
+}
+
+@media (min-width: 981px) {
+  .glpichat-widget.pos-top-right .glpichat-chatbox:not(.glpichat-launcher).is-open .glpichat-chatbox-panel,
+  .glpichat-widget.pos-top-left .glpichat-chatbox:not(.glpichat-launcher).is-open .glpichat-chatbox-panel {
+    bottom: auto !important;
+    top: var(--glpichat-panel-bottom-offset) !important;
+    border-radius: 12px !important;
+  }
+}
+
+/* Launcher tab: left positions move margin */
+.glpichat-widget.pos-bottom-left .glpichat-launcher .glpichat-chatbox-tab,
+.glpichat-widget.pos-top-left .glpichat-launcher .glpichat-chatbox-tab {
+  margin-left: 0;
+  margin-right: auto;
+}
+
+/* Launcher badge: left positions move to left side */
+.glpichat-widget.pos-bottom-left .glpichat-launcher-badge,
+.glpichat-widget.pos-top-left .glpichat-launcher-badge {
+  right: auto;
+  left: -5px;
+}
+
+/* Launcher tab button: left positions flip position */
+.glpichat-widget.pos-bottom-left .glpichat-launcher.is-open .glpichat-chatbox-tab,
+.glpichat-widget.pos-top-left .glpichat-launcher.is-open .glpichat-chatbox-tab {
+  right: auto;
+  left: 0;
+}
+
+/* --- Bottom-Right Animations --- */
+.glpichat-widget.pos-bottom-right .glpichat-chatbox-panel {
+  transform-origin: bottom right;
+}
+.glpichat-widget.pos-bottom-right .glpichat-chatbox.is-open .glpichat-chatbox-panel,
+.glpichat-widget.pos-bottom-right .glpichat-launcher.is-open .glpichat-chatbox-panel {
+  animation: glpichat-enter-br 220ms cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+.glpichat-widget.pos-bottom-right .glpichat-chatbox-panel.is-closing {
+  animation: glpichat-exit-br 200ms cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+}
+
+/* --- Bottom-Left Animations --- */
+.glpichat-widget.pos-bottom-left .glpichat-chatbox-panel {
+  transform-origin: bottom left;
+}
+.glpichat-widget.pos-bottom-left .glpichat-chatbox.is-open .glpichat-chatbox-panel,
+.glpichat-widget.pos-bottom-left .glpichat-launcher.is-open .glpichat-chatbox-panel {
+  animation: glpichat-enter-bl 220ms cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+.glpichat-widget.pos-bottom-left .glpichat-chatbox-panel.is-closing {
+  animation: glpichat-exit-bl 200ms cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+}
+
+/* --- Top-Right Animations --- */
+.glpichat-widget.pos-top-right .glpichat-chatbox-panel {
+  transform-origin: top right;
+}
+.glpichat-widget.pos-top-right .glpichat-chatbox.is-open .glpichat-chatbox-panel,
+.glpichat-widget.pos-top-right .glpichat-launcher.is-open .glpichat-chatbox-panel {
+  animation: glpichat-enter-tr 220ms cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+.glpichat-widget.pos-top-right .glpichat-chatbox-panel.is-closing {
+  animation: glpichat-exit-tr 200ms cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+}
+
+/* --- Top-Left Animations --- */
+.glpichat-widget.pos-top-left .glpichat-chatbox-panel {
+  transform-origin: top left;
+}
+.glpichat-widget.pos-top-left .glpichat-chatbox.is-open .glpichat-chatbox-panel,
+.glpichat-widget.pos-top-left .glpichat-launcher.is-open .glpichat-chatbox-panel {
+  animation: glpichat-enter-tl 220ms cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+.glpichat-widget.pos-top-left .glpichat-chatbox-panel.is-closing {
+  animation: glpichat-exit-tl 200ms cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+}
+
+/* Drag and Drop classes */
+.glpichat-widget.is-dragging {
+  pointer-events: none;
+  transition: none !important;
+}
+
+.glpichat-widget.is-dragging .glpichat-chatbox-tab,
+.glpichat-widget.is-dragging .glpichat-launcher-tab {
+  cursor: grabbing !important;
+  pointer-events: auto;
+}
+
+.glpichat-widget.is-dragging * {
+  user-select: none;
+}
+
+.glpichat-widget.glpichat-animating-position {
+  transition: transform 300ms cubic-bezier(0.2, 0.8, 0.2, 1) !important;
+}
+
+/* Disable chatbox width transitions when parent widget is dragged or animating snap position */
+.glpichat-widget.is-dragging .glpichat-chatbox,
+.glpichat-widget.glpichat-animating-position .glpichat-chatbox {
+  transition: none !important;
+}
+
 
 .glpichat-dock {
   display: flex;
@@ -45,6 +244,7 @@
   width: 210px;
   max-width: 210px;
   z-index: 4;
+  transition: flex-basis 200ms cubic-bezier(0.4, 0, 0.2, 1), width 200ms cubic-bezier(0.4, 0, 0.2, 1), max-width 200ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .glpichat-chatbox.glpichat-launcher {
@@ -52,6 +252,7 @@
   width: 62px;
   max-width: 62px;
   z-index: 8;
+  transition: flex-basis 200ms cubic-bezier(0.4, 0, 0.2, 1), width 200ms cubic-bezier(0.4, 0, 0.2, 1), max-width 200ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .glpichat-chatbox-tab {
@@ -141,9 +342,10 @@
   position: absolute;
   right: 0;
   bottom: var(--glpichat-panel-bottom-offset);
-  width: 100%;
+  width: 360px;
+  max-width: min(96vw, 360px);
   border-radius: 12px;
-  animation: glpichat-panel-enter 160ms ease-out;
+  animation: glpichat-panel-enter 200ms ease-out;
 }
 
 .glpichat-launcher .glpichat-chatbox-panel {
@@ -159,9 +361,10 @@
   position: absolute;
   right: 0;
   bottom: var(--glpichat-panel-bottom-offset);
-  width: 100%;
+  width: 420px;
+  max-width: min(96vw, 420px);
   border-radius: 12px;
-  animation: glpichat-panel-enter 160ms ease-out;
+  animation: glpichat-panel-enter 200ms ease-out;
 }
 
 .glpichat-launcher.is-open {
@@ -169,6 +372,19 @@
   min-height: 62px;
   width: 420px;
   max-width: min(96vw, 420px);
+}
+
+/* Chatbox and launcher width overrides during exit transition (is-closing) */
+.glpichat-chatbox.is-closing {
+  flex-basis: 210px !important;
+  width: 210px !important;
+  max-width: 210px !important;
+}
+
+.glpichat-launcher.is-closing {
+  flex-basis: 62px !important;
+  width: 62px !important;
+  max-width: 62px !important;
 }
 
 .glpichat-launcher .glpichat-chatbox-tab {
@@ -896,14 +1112,66 @@
     --glpichat-mobile-chat-width: min(380px, calc(100vw - var(--glpichat-mobile-launcher-width) - var(--glpichat-mobile-gap) - 24px));
   }
 
+  /* Mobile: adjust positions correctly based on corner */
   .glpichat-widget {
     right: 4px;
     left: 4px;
   }
 
+  .glpichat-widget.pos-bottom-right,
+  .glpichat-widget.pos-bottom-left {
+    bottom: calc(var(--glpichat-safe-bottom, 0px) + var(--glpichat-bottom-offset));
+    top: auto;
+  }
+
+  .glpichat-widget.pos-top-right,
+  .glpichat-widget.pos-top-left {
+    top: calc(var(--glpichat-safe-top, 0px) + var(--glpichat-bottom-offset));
+    bottom: auto;
+  }
+
+  /* Adjust dock alignment on mobile */
+  .glpichat-widget.pos-bottom-right .glpichat-dock,
+  .glpichat-widget.pos-bottom-left .glpichat-dock {
+    flex-direction: row;
+    align-items: flex-end;
+  }
+
+  .glpichat-widget.pos-top-right .glpichat-dock,
+  .glpichat-widget.pos-top-left .glpichat-dock {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+
   .glpichat-dock {
     justify-content: flex-end;
     flex-wrap: nowrap;
+  }
+
+  /* Reset panel horizontal directions on mobile */
+  .glpichat-widget.pos-bottom-left .glpichat-chatbox-panel,
+  .glpichat-widget.pos-top-left .glpichat-chatbox-panel {
+    right: 0;
+    left: auto;
+  }
+
+  /* Reset launcher tab position on mobile */
+  .glpichat-widget.pos-bottom-left .glpichat-launcher .glpichat-chatbox-tab,
+  .glpichat-widget.pos-top-left .glpichat-launcher .glpichat-chatbox-tab {
+    margin-left: auto;
+    margin-right: 0;
+  }
+
+  .glpichat-widget.pos-bottom-left .glpichat-launcher-badge,
+  .glpichat-widget.pos-top-left .glpichat-launcher-badge {
+    right: -5px;
+    left: auto;
+  }
+
+  /* Reset tab border-radius on mobile */
+  .glpichat-widget.pos-top-right .glpichat-chatbox-tab,
+  .glpichat-widget.pos-top-left .glpichat-chatbox-tab {
+    border-radius: 10px 10px 0 0;
   }
 
   .glpichat-chatbox,
@@ -963,17 +1231,99 @@
     bottom: var(--glpichat-panel-bottom-offset);
     width: 100%;
   }
+
+  /* Support top positions panels on mobile */
+  .glpichat-widget.pos-top-right .glpichat-chatbox:not(.glpichat-launcher).is-open .glpichat-chatbox-panel,
+  .glpichat-widget.pos-top-left .glpichat-chatbox:not(.glpichat-launcher).is-open .glpichat-chatbox-panel,
+  .glpichat-widget.pos-top-right .glpichat-launcher.is-open .glpichat-chatbox-panel,
+  .glpichat-widget.pos-top-left .glpichat-launcher.is-open .glpichat-chatbox-panel {
+    bottom: auto;
+    top: var(--glpichat-panel-bottom-offset);
+    border-radius: 0 0 12px 12px;
+  }
 }
 
-@keyframes glpichat-panel-enter {
+@keyframes glpichat-enter-br {
   from {
     opacity: 0;
-    transform: translateY(6px) scale(0.99);
+    transform: scale(0.85) translate(15px, 15px);
   }
-
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: scale(1) translate(0, 0);
+  }
+}
+@keyframes glpichat-exit-br {
+  from {
+    opacity: 1;
+    transform: scale(1) translate(0, 0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.85) translate(15px, 15px);
+  }
+}
+
+@keyframes glpichat-enter-bl {
+  from {
+    opacity: 0;
+    transform: scale(0.85) translate(-15px, 15px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translate(0, 0);
+  }
+}
+@keyframes glpichat-exit-bl {
+  from {
+    opacity: 1;
+    transform: scale(1) translate(0, 0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.85) translate(-15px, 15px);
+  }
+}
+
+@keyframes glpichat-enter-tr {
+  from {
+    opacity: 0;
+    transform: scale(0.85) translate(15px, -15px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translate(0, 0);
+  }
+}
+@keyframes glpichat-exit-tr {
+  from {
+    opacity: 1;
+    transform: scale(1) translate(0, 0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.85) translate(15px, -15px);
+  }
+}
+
+@keyframes glpichat-enter-tl {
+  from {
+    opacity: 0;
+    transform: scale(0.85) translate(-15px, -15px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translate(0, 0);
+  }
+}
+@keyframes glpichat-exit-tl {
+  from {
+    opacity: 1;
+    transform: scale(1) translate(0, 0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.85) translate(-15px, -15px);
   }
 }
 
@@ -997,7 +1347,7 @@
 
 .glpichat-chatbox.is-open .glpichat-chatbox-panel,
 .glpichat-launcher.is-open .glpichat-chatbox-panel {
-  animation: glpichat-panel-enter 160ms ease-out;
+  animation: glpichat-panel-enter 200ms ease-out;
 }
 
 /* --- Scrollbars Personalizadas --- */
@@ -1146,17 +1496,17 @@
 
 /* --- Animação de Fechamento (Closing State) --- */
 .glpichat-chatbox-panel.is-closing {
-  animation: glpichat-panel-exit 160ms ease-in forwards !important;
+  animation: glpichat-panel-exit 200ms cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
 }
 
 @keyframes glpichat-panel-exit {
   from {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: scale(1);
   }
   to {
     opacity: 0;
-    transform: translateY(6px) scale(0.99);
+    transform: scale(0.95);
   }
 }
 
@@ -1451,3 +1801,42 @@ body.glpichat-guest-page {
     padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
   }
 }
+
+/* Hide all panels when dragging or animating position */
+.glpichat-widget.is-dragging .glpichat-chatbox-panel,
+.glpichat-widget.glpichat-animating-position .glpichat-chatbox-panel {
+  display: none !important;
+}
+
+/* Hide other chat boxes when dragging or animating position */
+.glpichat-widget.is-dragging .glpichat-chatbox:not(.glpichat-launcher),
+.glpichat-widget.glpichat-animating-position .glpichat-chatbox:not(.glpichat-launcher) {
+  display: none !important;
+}
+
+/* Force launcher to closed dimensions when dragging or animating position */
+.glpichat-widget.is-dragging .glpichat-launcher,
+.glpichat-widget.glpichat-animating-position .glpichat-launcher {
+  flex-basis: 62px !important;
+  width: 62px !important;
+  max-width: 62px !important;
+}
+
+/* Prevent double scrollbar in Invite Management tabs by relying on GLPI's parent overflow */
+.glpichat-invite-management,
+.glpichat-invite-list {
+  overflow: visible !important;
+}
+
+@keyframes glpichat-panel-exit-top {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.99);
+  }
+}
+
+

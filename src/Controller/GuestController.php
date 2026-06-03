@@ -31,12 +31,17 @@ final class GuestController extends AbstractController
 {
     #[Route('/Accept/{token}', name: 'glpichat_accept', methods: ['GET'])]
     #[SecurityStrategy(Firewall::STRATEGY_NO_CHECK)]
-    public function accept(string $token): Response
+    public function accept(Request $request, string $token): Response
     {
         try {
             $accepted = glpichat_accept_invite($token);
             $response = new Response($this->guestHtml((int) $accepted['tickets_id'], (int) $accepted['rooms_id'], (string) $accepted['guest_name']));
-            $response->headers->setCookie(Cookie::create(GLPICHAT_GUEST_COOKIE, $accepted['session_token'])->withHttpOnly(true)->withSameSite('Strict'));
+            $response->headers->setCookie(
+                Cookie::create(GLPICHAT_GUEST_COOKIE, $accepted['session_token'])
+                    ->withHttpOnly(true)
+                    ->withSameSite('Strict')
+                    ->withSecure($request->isSecure())
+            );
             return $response;
         } catch (RuntimeException $e) {
             return new Response(htmlescape($e->getMessage()), 400);

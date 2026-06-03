@@ -4,3 +4,4 @@ tab_*.png
 task_*.md
 *.log
 design_patterns_widget.md
+/tests

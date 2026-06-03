@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/src/functions.php';
+require_once __DIR__ . '/src/EventCleanupCron.php';
 require_once __DIR__ . '/src/HookHandler.php';
 
 function plugin_glpichat_install(): bool
@@ -18,6 +19,7 @@ function plugin_glpichat_install(): bool
     }
 
     glpichat_add_indexes($migration);
+    $migration->addCrontask(\GlpiPlugin\Glpichat\EventCleanupCron::class, 'CleanEvents', DAY_TIMESTAMP);
 
     glpichat_add_profile_rights();
     Config::setConfigurationValues('plugin:glpichat', [
@@ -56,6 +58,10 @@ function plugin_glpichat_uninstall(): bool
 
     ProfileRight::deleteProfileRights(glpichat_right_names());
     Config::deleteConfigurationValues('plugin:glpichat', ['external_followup_user_id', 'default_notifications_bootstrapped']);
+    $DB->delete('glpi_crontasks', [
+        'itemtype' => \GlpiPlugin\Glpichat\EventCleanupCron::class,
+        'name' => 'CleanEvents',
+    ]);
 
     // Delete RequestType "GLPI Chat" if it exists
     $requesttype = new RequestType();

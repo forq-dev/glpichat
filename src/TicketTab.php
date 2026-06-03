@@ -29,7 +29,7 @@ final class TicketTab extends CommonGLPI
         $tabs = [];
 
         if (glpichat_can_read_ticket($tickets_id)) {
-            $tabs[1] = self::createTabEntry('Gestão de invites', 0, self::class, 'ti ti-ticket');
+            $tabs[1] = self::createTabEntry('Gestão de invites', 0, self::class, 'ti ti-message-circle');
         }
 
         if (glpichat_can_view_audit($tickets_id)) {
@@ -79,6 +79,15 @@ final class TicketTab extends CommonGLPI
                         return;
                     }
 
+                    var escapeHtml = function (value) {
+                        return String(value || '')
+                            .replace(/&/g, '&amp;')
+                            .replace(/</g, '&lt;')
+                            .replace(/>/g, '&gt;')
+                            .replace(/\"/g, '&quot;')
+                            .replace(/'/g, '&#039;');
+                    };
+
                     var fetchJson = async function (url, options) {
                         var response = await fetch(url, options || { credentials: 'same-origin' });
                         var data = await response.json();
@@ -108,13 +117,12 @@ final class TicketTab extends CommonGLPI
                         var listData = await fetchJson('/plugins/glpichat/Invite/List?tickets_id=' + ticketId, { credentials: 'same-origin' });
 
                         root.innerHTML = '';
-                        var createForm = document.createElement('form');
+                        var createForm = document.createElement('div');
                         createForm.className = 'glpichat-invite';
                         createForm.innerHTML = ''
-                            + '<input class=\"form-control\" type=\"text\" name=\"guest_name\" placeholder=\"Nome do convidado\" required>'\n                            + '<input class=\"form-control\" type=\"email\" name=\"guest_email\" placeholder=\"Email do convidado\">'\n                            + '<button class=\"btn btn-secondary\" type=\"submit\">Criar invite</button>'\n                            + '<div data-role=\"invite-result\"></div>';
+                            + '<input class=\"form-control\" type=\"text\" name=\"guest_name\" placeholder=\"Nome do convidado\" required>'\n                            + '<input class=\"form-control\" type=\"email\" name=\"guest_email\" placeholder=\"Email do convidado\">'\n                            + '<button class=\"btn btn-secondary\" type=\"button\" data-role=\"submit-btn\">Criar invite</button>'\n                            + '<div data-role=\"invite-result\"></div>';
 
-                        createForm.addEventListener('submit', async function (event) {
-                            event.preventDefault();
+                        var submitInvite = async function () {
                             var guestName = createForm.querySelector('[name=\\'guest_name\\']').value.trim();
                             var guestEmail = createForm.querySelector('[name=\\'guest_email\\']').value.trim();
                             if (!guestName) {
@@ -127,7 +135,18 @@ final class TicketTab extends CommonGLPI
                             });
                             createForm.querySelector('[data-role=\\'invite-result\\']').textContent = 'Link: ' + created.url;
                             await render();
-                        });
+                        };
+
+                        createForm.querySelector('[data-role=\"submit-btn\"]').addEventListener('click', submitInvite);
+
+                        var handleKeyPress = function (e) {
+                            if (e.key === 'Enter') {
+                                e.preventDefault();
+                                submitInvite();
+                            }
+                        };
+                        createForm.querySelector('[name=\\'guest_name\\']').addEventListener('keydown', handleKeyPress);
+                        createForm.querySelector('[name=\\'guest_email\\']').addEventListener('keydown', handleKeyPress);
 
                         var table = document.createElement('table');
                         table.className = 'table table-sm mt-3';
@@ -137,7 +156,7 @@ final class TicketTab extends CommonGLPI
                         (listData.invites || []).forEach(function (invite) {
                             var row = document.createElement('tr');
                             row.innerHTML = ''
-                                + '<td>' + (invite.guest_name || '') + '</td>'\n                                + '<td>' + (invite.status || '') + '</td>'\n                                + '<td>' + (invite.expires_at || '') + '</td>'\n                                + '<td>' + (invite.was_accessed ? 'Sim' : 'Não') + '</td>'\n                                + '<td></td>';
+                                + '<td>' + escapeHtml(invite.guest_name || '') + '</td>'\n                                + '<td>' + escapeHtml(invite.status || '') + '</td>'\n                                + '<td>' + escapeHtml(invite.expires_at || '') + '</td>'\n                                + '<td>' + (invite.was_accessed ? 'Sim' : 'Não') + '</td>'\n                                + '<td></td>';
 
                             var actionsCell = row.lastElementChild;
                             var revokeBtn = document.createElement('button');

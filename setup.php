@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Glpi\Http\SessionManager;
 use Glpi\Plugin\Hooks;
+use GlpiPlugin\Glpichat\EventCleanupCron;
 use GlpiPlugin\Glpichat\HookHandler;
 use GlpiPlugin\Glpichat\ProfileTab;
 use GlpiPlugin\Glpichat\TicketTab;
@@ -27,6 +28,7 @@ function plugin_init_glpichat(): void
 
     Plugin::registerClass(TicketTab::class, ['addtabon' => Ticket::class]);
     Plugin::registerClass(ProfileTab::class, ['addtabon' => Profile::class]);
+    Plugin::registerClass(EventCleanupCron::class);
 
     SessionManager::registerPluginStatelessPath('glpichat', '#^/Guest/.*#');
 

@@ -1492,7 +1492,7 @@
     90deg,
     var(--glpichat-surface-soft) 25%,
     var(--glpichat-line) 50%,
-    var(--glpichat-surface-soft) 75-v
+    var(--glpichat-surface-soft) 75
   );
   background: linear-gradient(
     90deg,

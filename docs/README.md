@@ -34,10 +34,16 @@ Ela é voltada para desenvolvedores, administradores de sistema e equipe técnic
 O plugin baseia-se em um modelo assíncrono cliente-servidor adaptado para a infraestrutura padrão do GLPI (PHP + MariaDB/MySQL).
 
 ```
-┌────────────────────────────────┐          Peticionamento HTTP          ┌────────────────────────────────┐
-│            Frontend            │ ────────────────────────────────────> │        Controllers PHP         │
-│     (glpichat.js / CSS)        │ <──────────────────────────────────── │  (Widget, Sync, Guest, etc.)   │
-└────────────────────────────────┘            Respostas JSON             └────────────────────────────────┘
+┌─────────────────────────────────────┐    Peticionamento HTTP    ┌────────────────────────────────┐
+│            Frontend                 │ ────────────────────────> │        Controllers PHP         │
+│  (glpichat-widget.js ou guest.js)   │ <──────────────────────── │  (Widget, Sync, Guest, etc.)   │
+│   ├── modules/constants.js          │      Respostas JSON       └────────────────────────────────┘
+│   ├── modules/state.js             │
+│   ├── modules/dom.js               │
+│   ├── modules/sanitize.js          │
+│   ├── modules/http.js              │
+│   └── modules/format.js            │
+└─────────────────────────────────────┘
                │                                                                         │
         Leitura/Escrita                                                           Leitura/Escrita
        no localStorage e                                                                no

@@ -58,7 +58,7 @@ Representa as sessões ativas dos usuários e convidados que interagiram em uma 
 
 * **Chaves e Restrições**:
   * `PRIMARY KEY`: (`id`)
-  * `INDEX` `participants_room_user`: (`rooms_id`, `users_id`)
+  * `INDEX` `participants_room_user`: (`users_id`, `rooms_id`)
   * `INDEX` `participants_session`: (`session_token_hash`) — Usado para autenticação de convidados externos.
 
 | Coluna | Tipo | Nulo | Padrão | Descrição |
@@ -70,6 +70,9 @@ Representa as sessões ativas dos usuários e convidados que interagiram em uma 
 | `guest_email` | `VARCHAR(255)` | Sim | `NULL` | E-mail do convidado externo (se aplicável). |
 | `participant_type` | `VARCHAR(20)` | Não | | Tipo de participante (`user` ou `guest`). |
 | `session_token_hash`| `CHAR(64)` | Sim | `NULL` | Hash SHA-256 do token de sessão ativo de convidados. |
+| `last_activity` | `TIMESTAMP` | Sim | `NULL` | Última interação do participante na sala (atualizado a cada sync/send). |
+| `last_seen` | `TIMESTAMP` | Sim | `NULL` | Última vez que o participante foi visto (atualizado no sync). |
+| `is_typing_until` | `TIMESTAMP` | Sim | `NULL` | Indicador de digitação ativa; expira 4s após o último sinal. |
 | `joined_at` | `TIMESTAMP` | Não | `CURRENT_TIMESTAMP` | Data/hora de entrada na sala. |
 | `left_at` | `TIMESTAMP` | Sim | `NULL` | Data/hora de saída da sala (se revogado/desconectado). |
 

@@ -138,6 +138,17 @@ Os convidados externos (sem login no GLPI) usam um fluxo simplificado baseado em
 }
 ```
 
+### 3. Endpoint: `/Widget/Leave` (Usuário Autenticado)
+* **Método**: `POST`
+* **Headers**: `Content-Type: application/x-www-form-urlencoded`
+* **Payload**: `_glpi_csrf_token`, `tickets_id`, `room_type`
+* **Objetivo**: Registrar a saída voluntária do usuário de uma sala. Remove o participante ativo e encerra o polling para aquele canal.
+
+### 4. Endpoint: `/Guest/Leave` (Convidados Externos)
+* **Método**: `POST`
+* **Payload**: `_glpi_csrf_token` (opcional para guests)
+* **Objetivo**: Registrar a saída voluntária do convidado da sala. Remove a sessão do convidado e redireciona para a página de encerramento.
+
 ---
 
 ## ⚡ Otimizações Implementadas
@@ -150,3 +161,6 @@ Os convidados externos (sem login no GLPI) usam um fluxo simplificado baseado em
    O loop de polling no JavaScript restringe a no máximo **20 salas ativas** por ciclo para evitar requisições gigantescas em usuários com dezenas de janelas antigas em aberto.
 4. **Renovação de CSRF**:
    Toda resposta de polling/sincronização do widget atualiza o token CSRF (`_glpi_csrf_token`) no estado do JavaScript, prevenindo a expiração de sessão em sessões de longa duração.
+
+5. **Renovação de `last_activity`**:
+   No endpoint `/Guest/Sync`, a cada requisição bem-sucedida o servidor atualiza as colunas `last_activity` e `last_seen` do participante na tabela `glpi_plugin_glpichat_participants`, permitindo monitorar presença ativa de convidados.

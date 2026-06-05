@@ -1,12 +1,14 @@
 # Arquitetura do Frontend — GLPI Chat
 
-Este documento detalha o funcionamento técnico do frontend do **GLPI Chat** (implementado no arquivo [glpichat.js](file:///home/h1d4n/Documents/dev-glpi/glpi/plugins/glpichat/public/js/glpichat.js) e [glpichat.css](file:///home/h1d4n/Documents/dev-glpi/glpi/plugins/glpichat/public/css/glpichat.css)), cobrindo estrutura, gerenciamento de estado, experiência do usuário (UX), responsividade e decisões de design.
+Este documento detalha o funcionamento técnico do frontend do **GLPI Chat** (implementado nos arquivos [glpichat-widget.js](file:///home/h1d4n/Documents/dev-glpi/glpi/plugins/glpichat/public/js/glpichat-widget.js), [glpichat-guest.js](file:///home/h1d4n/Documents/dev-glpi/glpi/plugins/glpichat/public/js/glpichat-guest.js) e [glpichat.css](file:///home/h1d4n/Documents/dev-glpi/glpi/plugins/glpichat/public/css/glpichat.css)), cobrindo estrutura, gerenciamento de estado, experiência do usuário (UX), responsividade e decisões de design.
+
+O JavaScript foi modularizado em 6 módulos ES6 compartilhados (`src/js/modules/`), consumidos por dois bundles de saída. Consulte [javascript-architecture.md](file:///home/h1d4n/Documents/dev-glpi/glpi/plugins/glpichat/.agents/references/javascript-architecture.md) para detalhes da arquitetura modular.
 
 ---
 
 ## 🏗️ Estrutura de Componentes da Interface
 
-O widget cliente é dinamicamente injetado no final do `<body>` do GLPI pela função `createShell()`. A estrutura DOM principal é organizada da seguinte maneira:
+O widget cliente é dinamicamente injetado no final do `<body>` do GLPI pela função `createShell()` (definida no módulo `dom.js`). A estrutura DOM principal é organizada da seguinte maneira:
 
 ```
 div.glpichat-widget
@@ -32,7 +34,7 @@ div.glpichat-widget
 
 ## 💾 Gerenciamento de Estado no Cliente
 
-O arquivo `glpichat.js` utiliza uma arquitetura de estado centralizada e reativa por meio do objeto global `state`.
+O estado é gerenciado pelo módulo `state.js` com um objeto central `state`. O bundle `glpichat-widget.js` é usado por usuários autenticados, enquanto `glpichat-guest.js` atende convidados externos com fluxo simplificado.
 
 * **Estrutura do Objeto `state`**:
   * `csrf`: Token de segurança CSRF ativo no GLPI (atualizado a cada resposta).

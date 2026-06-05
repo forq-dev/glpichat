@@ -37,5 +37,6 @@ jobs:
         args: >
           -Dsonar.organization=${{ secrets.SONAR_ORG }}
           -Dsonar.projectKey=glpichat
+          -Dsonar.branch.name=${{ github.head_ref || github.ref_name }}
       env:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

@@ -34,19 +34,20 @@ final class ProfileTab extends CommonGLPI
 
         $rights_definitions = [
             [
-                'label' => 'Ler chats',
-                'field' => 'plugin_glpichat_read',
-                'rights' => [READ => __('Read')],
+                'label' => 'Chat publico',
+                'field' => 'plugin_glpichat_public',
+                'rights' => [
+                    READ => __('Read'),
+                    CREATE => __('Write'),
+                ],
             ],
             [
-                'label' => 'Enviar no chat publico',
-                'field' => 'plugin_glpichat_send_public',
-                'rights' => [CREATE => __('Write')],
-            ],
-            [
-                'label' => 'Enviar na discussao interna',
-                'field' => 'plugin_glpichat_send_internal',
-                'rights' => [CREATE => __('Write')],
+                'label' => 'Chat interno',
+                'field' => 'plugin_glpichat_internal',
+                'rights' => [
+                    READ => __('Read'),
+                    CREATE => __('Write'),
+                ],
             ],
             [
                 'label' => 'Convidar terceiros',
@@ -67,7 +68,6 @@ final class ProfileTab extends CommonGLPI
                 'field' => 'plugin_glpichat_admin',
                 'rights' => [
                     READ => __('Read'),
-                    CREATE => __('Write'),
                     UPDATE => __('Update'),
                 ],
             ],

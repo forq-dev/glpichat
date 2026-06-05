@@ -3,6 +3,9 @@
   "description": "Chat contextual vinculado a chamados do GLPI.",
   "type": "glpi-plugin",
   "license": "GPL-3.0-or-later",
+  "scripts": {
+    "test:unit:php": "bash tests/run_unit_php.sh"
+  },
   "require": {
     "php": ">=8.2"
   }

@@ -14,12 +14,14 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 
-use function glpichat_list_invites;
-use function glpichat_reissue_invite;
+use function glpichat_list_invites_use_case;
+use function glpichat_reissue_invite_use_case;
 use function glpichat_require_logged_csrf;
-use function glpichat_revoke_invite;
+use function glpichat_revoke_invite_use_case;
+use function glpichat_assert_can_update_invites;
 
 require_once dirname(__DIR__) . '/functions.php';
+require_once dirname(__DIR__) . '/flows/invite_flow.php';
 
 final class InviteManageController extends AbstractController
 {
@@ -30,12 +32,15 @@ final class InviteManageController extends AbstractController
         try {
             Session::checkLoginUser();
             $tickets_id = $request->query->getInt('tickets_id');
-            if ($tickets_id <= 0) {
-                throw new RuntimeException('Invalid invite list parameters.');
-            }
-
             return new JsonResponse([
-                'invites' => glpichat_list_invites($tickets_id),
+                'invites' => glpichat_list_invites_use_case(
+                    $tickets_id,
+                    'glpichat_assert_can_read_ticket',
+                    'glpichat_assert_can_view_participants',
+                    'glpichat_fetch_invites_for_ticket',
+                    'glpichat_user_display_name',
+                    time()
+                ),
                 '_glpi_csrf_token' => Session::getNewCSRFToken(),
             ]);
         } catch (RuntimeException $e) {
@@ -55,7 +60,16 @@ final class InviteManageController extends AbstractController
                 throw new RuntimeException('Invalid invite revoke parameters.');
             }
 
-            glpichat_revoke_invite($invite_id);
+            glpichat_revoke_invite_use_case(
+                $invite_id,
+                'glpichat_find_invite_by_id',
+                'glpichat_assert_can_update_invites',
+                'glpichat_current_user_id',
+                'glpichat_mark_invite_revoked',
+                'glpichat_record_event',
+                'glpichat_disconnect_participant',
+                (string) ($_SESSION['glpi_currenttime'] ?? date('Y-m-d H:i:s'))
+            );
 
             return new JsonResponse(['ok' => true, '_glpi_csrf_token' => Session::getNewCSRFToken()]);
         } catch (RuntimeException $e) {
@@ -75,7 +89,17 @@ final class InviteManageController extends AbstractController
                 throw new RuntimeException('Invalid invite reissue parameters.');
             }
 
-            $invite = glpichat_reissue_invite($invite_id);
+            $invite = glpichat_reissue_invite_use_case(
+                $invite_id,
+                (string) $GLOBALS['CFG_GLPI']['url_base'],
+                'glpichat_find_invite_by_id',
+                'glpichat_assert_can_update_invites',
+                static fn(): string => bin2hex(random_bytes(32)),
+                'glpichat_current_user_id',
+                'glpichat_update_invite_reissue',
+                'glpichat_record_event',
+                GLPICHAT_INVITE_TTL_SECONDS
+            );
             $invite['_glpi_csrf_token'] = Session::getNewCSRFToken();
             return new JsonResponse($invite);
         } catch (RuntimeException $e) {

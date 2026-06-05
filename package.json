@@ -1,0 +1,19 @@
+{
+  "name": "glpichat-tests",
+  "version": "1.0.0",
+  "description": "JavaScript unit tests for GLPI Chat Plugin",
+  "type": "module",
+  "scripts": {
+    "build": "esbuild src/js/glpichat-widget.js src/js/glpichat-guest.js --bundle --minify --outdir=public/js",
+    "dev": "esbuild src/js/glpichat-widget.js src/js/glpichat-guest.js --bundle --outdir=public/js --watch",
+    "test": "vitest run --config tests/unit/js/vitest.config.js",
+    "test:watch": "vitest --config tests/unit/js/vitest.config.js",
+    "test:coverage": "vitest run --config tests/unit/js/vitest.config.js --coverage"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^1.0.0",
+    "esbuild": "^0.28.0",
+    "jsdom": "^22.0.0",
+    "vitest": "^1.0.0"
+  }
+}

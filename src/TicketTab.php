@@ -10,6 +10,9 @@ use Ticket;
 use Html;
 
 use function glpichat_can_read_ticket;
+use function glpichat_can_create_invites;
+use function glpichat_can_update_invites;
+use function glpichat_can_view_participants;
 use function glpichat_can_view_audit;
 
 final class TicketTab extends CommonGLPI
@@ -28,7 +31,7 @@ final class TicketTab extends CommonGLPI
         $tickets_id = (int) $item->getID();
         $tabs = [];
 
-        if (glpichat_can_read_ticket($tickets_id)) {
+        if (glpichat_can_view_participants($tickets_id)) {
             $tabs[1] = self::createTabEntry('Gestão de invites', 0, self::class, 'ti ti-message-circle');
         }
 
@@ -48,20 +51,25 @@ final class TicketTab extends CommonGLPI
         $tickets_id = (int) $item->getID();
 
         if ($tabnum == 1) {
-            if (!glpichat_can_read_ticket($tickets_id)) {
+            if (!glpichat_can_view_participants($tickets_id)) {
                 return true;
             }
 
             $csrf = Session::getNewCSRFToken();
+            $can_create_invites = glpichat_can_create_invites($tickets_id);
+            $can_update_invites = glpichat_can_update_invites($tickets_id);
             echo '<div class="card">';
             echo '<div class="card-header"><strong>Gestão de invites</strong></div>';
             echo '<div class="card-body">';
             echo '<p>Use este painel para criar, revogar e reemitir invites do chamado.</p>';
-            echo '<div class="glpichat-invite-management" data-ticket-id="' . htmlescape((string) $tickets_id) . '" data-csrf="' . htmlescape($csrf) . '"></div>';
+            echo '<div class="glpichat-invite-management"'
+                . ' data-ticket-id="' . htmlescape((string) $tickets_id) . '"'
+                . ' data-csrf="' . htmlescape($csrf) . '"'
+                . ' data-can-create="' . ($can_create_invites ? '1' : '0') . '"'
+                . ' data-can-update="' . ($can_update_invites ? '1' : '0') . '"'
+                . '></div>';
             echo '</div>';
-            echo '</div>';
-
-            echo Html::scriptBlock("
+            echo '</div>';            echo Html::scriptBlock("
                 (function () {
                     var root = document.querySelector('.glpichat-invite-management[data-ticket-id=\\\"" . (int) $tickets_id . "\\\"]');
                     if (!root) {
@@ -75,6 +83,8 @@ final class TicketTab extends CommonGLPI
 
                     var csrf = root.dataset.csrf || '';
                     var ticketId = Number(root.dataset.ticketId || '0');
+                    var canCreate = root.dataset.canCreate === '1';
+                    var canUpdate = root.dataset.canUpdate === '1';
                     if (!ticketId) {
                         return;
                     }
@@ -113,28 +123,99 @@ final class TicketTab extends CommonGLPI
                         });
                     };
 
-                    var render = async function () {
-                        var listData = await fetchJson('/plugins/glpichat/Invite/List?tickets_id=' + ticketId, { credentials: 'same-origin' });
+                    var normalizedInviteText = function (value) {
+                        return String(value || '').trim().toLowerCase();
+                    };
 
-                        root.innerHTML = '';
+                    var inviteFlagEnabled = function (value) {
+                        return value === true || value === 1 || value === '1';
+                    };
+
+                    var deriveInviteState = function (invite) {
+                        var inviteStatus = normalizedInviteText(invite.invite_status || invite.status);
+                        var leftAt = String(invite.left_at || invite.session_left_at || invite.session_ended_at || '').trim();
+                        var explicitSessionStatus = normalizedInviteText(invite.session_status);
+                        var fallbackSessionStatus = inviteFlagEnabled(invite.is_session_active)
+                            ? 'active'
+                            : (leftAt !== '' ? normalizedInviteText(invite.session_end_reason || invite.session_reason || 'disconnected') : '');
+                        var sessionStatus = explicitSessionStatus || fallbackSessionStatus;
+                        var hasSessionTelemetry = sessionStatus !== '' || leftAt !== '' || inviteFlagEnabled(invite.is_session_active);
+                        var inviteLabel = 'Status desconhecido';
+                        var sessionLabel = 'Sem sessão';
+                        var accessLabel = invite.was_accessed ? 'Sim' : 'Não';
+
+                        if (inviteStatus === 'active') {
+                            inviteLabel = 'Convite ativo';
+                        } else if (inviteStatus === 'expired') {
+                            inviteLabel = 'Convite expirado';
+                        } else if (inviteStatus === 'revoked') {
+                            inviteLabel = 'Convite revogado';
+                        } else if (inviteStatus === 'accepted') {
+                            inviteLabel = 'Link consumido';
+                        }
+
+                        if (sessionStatus === 'active') {
+                            sessionLabel = 'Sessão ativa';
+                            accessLabel = 'Sessão ativa';
+                        } else if (sessionStatus === 'timeout' || sessionStatus === 'expired') {
+                            sessionLabel = 'Sessão expirada';
+                            accessLabel = 'Encerrada por inatividade';
+                        } else if (sessionStatus === 'revoked' || sessionStatus === 'disconnected' || sessionStatus === 'cancelled') {
+                            sessionLabel = 'Sessão encerrada';
+                            accessLabel = 'Encerrada manualmente';
+                        } else if (inviteStatus === 'accepted') {
+                            sessionLabel = hasSessionTelemetry ? 'Sessão encerrada' : 'Link consumido';
+                        }
+
+                        return {
+                            inviteStatus: inviteStatus,
+                            sessionStatus: sessionStatus,
+                            inviteLabel: inviteLabel,
+                            sessionLabel: sessionLabel,
+                            accessLabel: accessLabel,
+                            canDisconnect: sessionStatus === 'active' || (inviteStatus === 'accepted' && !hasSessionTelemetry),
+                            canRevoke: inviteStatus === 'active',
+                            canReissue: inviteStatus === 'active' || inviteStatus === 'expired' || inviteStatus === 'revoked'
+                        };
+                    };
+
+                    // Initialize static DOM structure
+                    root.innerHTML = '';
+                    var tbody = document.createElement('tbody');
+
+                    if (canCreate) {
                         var createForm = document.createElement('div');
-                        createForm.className = 'glpichat-invite';
+                        createForm.className = 'glpichat-invite mb-3';
                         createForm.innerHTML = ''
-                            + '<input class=\"form-control\" type=\"text\" name=\"guest_name\" placeholder=\"Nome do convidado\" required>'\n                            + '<input class=\"form-control\" type=\"email\" name=\"guest_email\" placeholder=\"Email do convidado\">'\n                            + '<button class=\"btn btn-secondary\" type=\"button\" data-role=\"submit-btn\">Criar invite</button>'\n                            + '<div data-role=\"invite-result\"></div>';
+                            + '<input class=\"form-control mb-2\" type=\"text\" name=\"guest_name\" placeholder=\"Nome do convidado\" required>'
+                            + '<input class=\"form-control mb-2\" type=\"email\" name=\"guest_email\" placeholder=\"Email do convidado\">'
+                            + '<button class=\"btn btn-secondary\" type=\"button\" data-role=\"submit-btn\">Criar invite</button>'
+                            + '<div class=\"mt-2\" data-role=\"invite-result\"></div>';
 
                         var submitInvite = async function () {
                             var guestName = createForm.querySelector('[name=\\'guest_name\\']').value.trim();
                             var guestEmail = createForm.querySelector('[name=\\'guest_email\\']').value.trim();
+                            var resultDiv = createForm.querySelector('[data-role=\\'invite-result\\']');
                             if (!guestName) {
                                 return;
                             }
-                            var created = await postForm('/plugins/glpichat/Invite', {
-                                tickets_id: ticketId,
-                                guest_name: guestName,
-                                guest_email: guestEmail
-                            });
-                            createForm.querySelector('[data-role=\\'invite-result\\']').textContent = 'Link: ' + created.url;
-                            await render();
+                            var btn = createForm.querySelector('[data-role=\\'submit-btn\\']');
+                            btn.disabled = true;
+                            try {
+                                var created = await postForm('/plugins/glpichat/Invite', {
+                                    tickets_id: ticketId,
+                                    guest_name: guestName,
+                                    guest_email: guestEmail
+                                });
+                                resultDiv.innerHTML = '<span class=\"text-success fw-bold\">Link gerado:</span> <a href=\"' + escapeHtml(created.url) + '\" target=\"_blank\">' + escapeHtml(created.url) + '</a>';
+                                createForm.querySelector('[name=\\'guest_name\\']').value = '';
+                                createForm.querySelector('[name=\\'guest_email\\']').value = '';
+                                await render();
+                            } catch (e) {
+                                resultDiv.innerHTML = '<span class=\"text-danger\">Erro: ' + escapeHtml(e.message) + '</span>';
+                            } finally {
+                                btn.disabled = false;
+                            }
                         };
 
                         createForm.querySelector('[data-role=\"submit-btn\"]').addEventListener('click', submitInvite);
@@ -147,48 +228,129 @@ final class TicketTab extends CommonGLPI
                         };
                         createForm.querySelector('[name=\\'guest_name\\']').addEventListener('keydown', handleKeyPress);
                         createForm.querySelector('[name=\\'guest_email\\']').addEventListener('keydown', handleKeyPress);
+                        root.appendChild(createForm);
+                    }
 
-                        var table = document.createElement('table');
-                        table.className = 'table table-sm mt-3';
-                        table.innerHTML = '<thead><tr><th>Convidado</th><th>Status</th><th>Expira</th><th>Acesso</th><th>Ações</th></tr></thead>';
-                        var tbody = document.createElement('tbody');
+                    var table = document.createElement('table');
+                    table.className = 'table table-sm mt-3';
+                    table.innerHTML = '<thead><tr><th>Convidado</th><th>Convite</th><th>Sessão</th><th>Expira</th><th>Acesso</th><th>Ações</th></tr></thead>';
+                    table.appendChild(tbody);
+                    root.appendChild(table);
 
-                        (listData.invites || []).forEach(function (invite) {
+                    var render = async function () {
+                        var listData = await fetchJson('/plugins/glpichat/Invite/List?tickets_id=' + ticketId, { credentials: 'same-origin' });
+
+                        // Update only the tbody to prevent flickering and input loss
+                        tbody.innerHTML = '';
+
+                        if (!listData.invites || listData.invites.length === 0) {
+                            var emptyRow = document.createElement('tr');
+                            emptyRow.innerHTML = '<td colspan=\"6\" class=\"text-center text-muted\">Nenhum convite encontrado.</td>';
+                            tbody.appendChild(emptyRow);
+                            return;
+                        }
+
+                        listData.invites.forEach(function (invite) {
+                            var inviteState = deriveInviteState(invite);
                             var row = document.createElement('tr');
                             row.innerHTML = ''
-                                + '<td>' + escapeHtml(invite.guest_name || '') + '</td>'\n                                + '<td>' + escapeHtml(invite.status || '') + '</td>'\n                                + '<td>' + escapeHtml(invite.expires_at || '') + '</td>'\n                                + '<td>' + (invite.was_accessed ? 'Sim' : 'Não') + '</td>'\n                                + '<td></td>';
+                                + '<td>' + escapeHtml(invite.guest_name || '') + '</td>'
+                                + '<td>' + escapeHtml(inviteState.inviteLabel) + '</td>'
+                                + '<td>' + escapeHtml(inviteState.sessionLabel) + '</td>'
+                                + '<td>' + escapeHtml(invite.expires_at || '') + '</td>'
+                                + '<td>' + escapeHtml(inviteState.accessLabel) + '</td>'
+                                + '<td></td>';
 
                             var actionsCell = row.lastElementChild;
-                            var revokeBtn = document.createElement('button');
-                            revokeBtn.className = 'btn btn-sm btn-outline-danger me-1';
-                            revokeBtn.type = 'button';
-                            revokeBtn.textContent = 'Revogar';
-                            revokeBtn.addEventListener('click', async function () {
-                                await postForm('/plugins/glpichat/Invite/Revoke', { invite_id: invite.id });
-                                await render();
-                            });
 
-                            var reissueBtn = document.createElement('button');
-                            reissueBtn.className = 'btn btn-sm btn-outline-primary';
-                            reissueBtn.type = 'button';
-                            reissueBtn.textContent = 'Reemitir';
-                            reissueBtn.addEventListener('click', async function () {
-                                var result = await postForm('/plugins/glpichat/Invite/Reissue', { invite_id: invite.id });
-                                window.alert('Novo link: ' + result.url);
-                                await render();
-                            });
+                            if (canUpdate && inviteState.canReissue) {
+                                var reissueBtn = document.createElement('button');
+                                reissueBtn.className = 'btn btn-sm btn-outline-primary me-1';
+                                reissueBtn.type = 'button';
+                                reissueBtn.textContent = 'Reemitir';
+                                reissueBtn.addEventListener('click', async function () {
+                                    try {
+                                        var result = await postForm('/plugins/glpichat/Invite/Reissue', { invite_id: invite.id });
+                                        window.alert('Novo link: ' + result.url);
+                                        await render();
+                                    } catch (e) {
+                                        window.alert('Erro: ' + e.message);
+                                    }
+                                });
+                                actionsCell.appendChild(reissueBtn);
+                            }
 
-                            actionsCell.appendChild(revokeBtn);
-                            actionsCell.appendChild(reissueBtn);
+                            if (canUpdate && inviteState.canRevoke) {
+                                var revokeBtn = document.createElement('button');
+                                revokeBtn.className = 'btn btn-sm btn-outline-danger me-1';
+                                revokeBtn.type = 'button';
+                                revokeBtn.textContent = 'Cancelar convite';
+                                revokeBtn.addEventListener('click', async function () {
+                                    if (window.confirm('Tem certeza que deseja cancelar este convite?')) {
+                                        await postForm('/plugins/glpichat/Invite/Revoke', { invite_id: invite.id });
+                                        await render();
+                                    }
+                                });
+                                actionsCell.appendChild(revokeBtn);
+                            }
+
+                            if (canUpdate && inviteState.canDisconnect) {
+                                var disconnectBtn = document.createElement('button');
+                                disconnectBtn.className = 'btn btn-sm btn-outline-warning';
+                                disconnectBtn.type = 'button';
+                                disconnectBtn.textContent = 'Encerrar chat';
+                                disconnectBtn.addEventListener('click', async function () {
+                                    if (window.confirm('Tem certeza que deseja encerrar o chat ativo?')) {
+                                        await postForm('/plugins/glpichat/Invite/Revoke', { invite_id: invite.id });
+                                        await render();
+                                    }
+                                });
+                                actionsCell.appendChild(disconnectBtn);
+                            }
+
                             tbody.appendChild(row);
                         });
-
-                        table.appendChild(tbody);
-                        root.appendChild(createForm);
-                        root.appendChild(table);
                     };
 
-                    render().catch(function (error) {
+                    if (typeof root._glpiChatInviteTimer === 'number') {
+                        window.clearInterval(root._glpiChatInviteTimer);
+                    }
+
+                    // Visibility tracking using IntersectionObserver
+                    var isVisible = true;
+                    if ('IntersectionObserver' in window) {
+                        isVisible = false; // default to false until observed
+                        var observer = new IntersectionObserver(function (entries) {
+                            isVisible = entries[0].isIntersecting;
+                            if (isVisible) {
+                                render().catch(function () {});
+                            }
+                        }, { root: null, threshold: 0 });
+                        observer.observe(root);
+                    } else {
+                        // Fallback
+                        isVisible = true;
+                    }
+
+                    render().then(function () {
+                        root._glpiChatInviteTimer = window.setInterval(function () {
+                            if (!document.body.contains(root)) {
+                                window.clearInterval(root._glpiChatInviteTimer);
+                                delete root._glpiChatInviteTimer;
+                                return;
+                            }
+                            if (document.hidden || !isVisible) {
+                                return;
+                            }
+                            // Extra check for tab visibility fallback
+                            var tabPane = root.closest('.tab-pane');
+                            if (tabPane && !tabPane.classList.contains('active')) {
+                                return;
+                            }
+                            
+                            render().catch(function () {});
+                        }, 10000);
+                    }).catch(function (error) {
                         root.innerHTML = '<div class=\"alert alert-warning\">Falha ao carregar gestão de invites: ' + error.message + '</div>';
                     });
                 })();
@@ -260,7 +422,7 @@ final class TicketTab extends CommonGLPI
                     $details = 'Mensagem adicionada no canal <strong>' . ($room_type === 'internal' ? 'interno' : 'público') . '</strong>.';
                     break;
                 case 'guest_invited':
-                    $action_label = 'Convidado Convidado';
+                    $action_label = 'Convite Criado';
                     $guest_name = $payload['guest_name'] ?? '';
                     $details = 'Convite criado para o convidado <strong>' . htmlescape($guest_name) . '</strong>.';
                     break;
@@ -280,6 +442,16 @@ final class TicketTab extends CommonGLPI
                     $expires = isset($payload['expires_at']) ? Html::convDateTime($payload['expires_at']) : '';
                     $details = 'Convite ID <strong>#' . htmlescape((string) $invite_id) . '</strong> foi reemitido. Nova expiração: ' . $expires . '.';
                     break;
+                case 'guest_left':
+                    $action_label = 'Convidado Saiu';
+                    $guest_name = $payload['guest_name'] ?? 'Convidado';
+                    $details = 'O convidado <strong>' . htmlescape($guest_name) . '</strong> saiu do chat.';
+                    break;
+                case 'guest_left_timeout':
+                    $action_label = 'Sessão Expirada';
+                    $guest_name = $payload['guest_name'] ?? 'Convidado';
+                    $details = 'A sessão do convidado <strong>' . htmlescape($guest_name) . '</strong> expirou por inatividade.';
+                    break;
             }
 
             // Actor identification
@@ -294,6 +466,8 @@ final class TicketTab extends CommonGLPI
             } else if ($row['actor_type'] === 'guest') {
                 $guest_name = $payload['guest_name'] ?? 'Convidado';
                 $actor = htmlescape($guest_name) . ' (Externo)';
+            } else if ($row['actor_type'] === 'system') {
+                $actor = 'Sistema';
             } else {
                 $actor = 'Desconhecido';
             }

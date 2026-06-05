@@ -1,15 +1,53 @@
-(function () {
-  "use strict";
+import {
+  pluginBase,
+  POLL_FOCUSED_MS,
+  POLL_IDLE_MS,
+  POLL_BG_MS,
+  META_SYNC_MS,
+  DESKTOP_MAX_OPEN,
+  MOBILE_MAX_OPEN,
+  VALID_POSITIONS,
+  SAFE_BOTTOM_MARGIN_PX,
+  TERMINAL_TICKET_STATUSES,
+  isValidRoomType
+} from './modules/constants.js';
 
-  const pluginBase = "/plugins/glpichat";
-  const POLL_FOCUSED_MS = 2500;
-  const POLL_IDLE_MS = 9000;
-  const POLL_BG_MS = 18000;
-  const META_SYNC_MS = 15000;
-  const DESKTOP_MAX_OPEN = 3;
-  const MOBILE_MAX_OPEN = 1;
+import {
+  storageLoad,
+  storageSave,
+  loadUiState,
+  saveUiState
+} from './modules/state.js';
 
-  const VALID_POSITIONS = ["bottom-right", "bottom-left", "top-left", "top-right"];
+import {
+  isVisibleElement,
+  detectBottomObstruction,
+  detectTopObstruction,
+  updateSafeBottom,
+  submitForm,
+  channelKey,
+  isLeftPosition
+} from './modules/dom.js';
+
+import { sanitize } from './modules/sanitize.js';
+
+import {
+  fetchJson,
+  postForm,
+  setCsrfToken,
+  getCsrfToken
+} from './modules/http.js';
+
+import {
+  isVisibleSystemEvent,
+  formatSystemEventMessage,
+  formatTypingMessage
+} from './modules/format.js';
+
+"use strict";
+
+  const AUTO_SCROLL_THRESHOLD_PX = 160;
+  const INVITE_REFRESH_MS = 5000;
 
   const throttle = (func, limit) => {
     let inThrottle;
@@ -24,8 +62,118 @@
     };
   };
 
+  const normalizeEventCursor = (value) => {
+    if (typeof value === "string") {
+      return value;
+    }
+    if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+      return String(value);
+    }
+    return "";
+  };
+
+  const pickLatestEventCursor = (currentValue, nextValue) => {
+    const currentCursor = normalizeEventCursor(currentValue);
+    const nextCursor = normalizeEventCursor(nextValue);
+    if (currentCursor === "") {
+      return nextCursor;
+    }
+    if (nextCursor === "") {
+      return currentCursor;
+    }
+    return currentCursor.localeCompare(nextCursor) >= 0 ? currentCursor : nextCursor;
+  };
+
+  const messageSortKey = (message) => {
+    const dateValue = String(message?.date_creation || "");
+    const messageId = String(Number(message?.id || 0)).padStart(12, "0");
+
+    return `${dateValue}|1|${messageId}`;
+  };
+
+  const eventSortKey = (event) => {
+    const dateValue = String(event?.date_creation || "");
+    const eventId = normalizeEventCursor(event?.id);
+
+    return `${dateValue}|0|${eventId}`;
+  };
+
+  const isNodeNearBottom = (node) => {
+    if (!(node instanceof HTMLElement)) {
+      return true;
+    }
+
+    return (node.scrollHeight - (node.scrollTop + node.clientHeight)) <= AUTO_SCROLL_THRESHOLD_PX;
+  };
+
+  const hasSelectionInsideNode = (node) => {
+    if (!(node instanceof HTMLElement)) {
+      return false;
+    }
+
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+      return false;
+    }
+
+    const anchorNode = selection.anchorNode;
+    const focusNode = selection.focusNode;
+
+    return Boolean(anchorNode && node.contains(anchorNode))
+      || Boolean(focusNode && node.contains(focusNode));
+  };
+
+  const firstFileFromTransfer = (transfer) => {
+    if (!transfer) {
+      return null;
+    }
+
+    if (transfer.files instanceof FileList && transfer.files.length > 0) {
+      const directFile = transfer.files[0];
+      return directFile instanceof File ? directFile : null;
+    }
+
+    if (!transfer.items) {
+      return null;
+    }
+
+    for (const item of Array.from(transfer.items)) {
+      if (!item || item.kind !== "file") {
+        continue;
+      }
+      const file = item.getAsFile();
+      if (file instanceof File) {
+        return file;
+      }
+    }
+
+    return null;
+  };
+
+  const assignSingleFileToInput = (fileInput, file) => {
+    if (!(fileInput instanceof HTMLInputElement) || !(file instanceof File)) {
+      return false;
+    }
+
+    if (typeof DataTransfer !== "function") {
+      return false;
+    }
+
+    const transfer = new DataTransfer();
+    transfer.items.add(file);
+    fileInput.files = transfer.files;
+
+    return fileInput.files instanceof FileList && fileInput.files.length > 0;
+  };
+
+
   const state = {
-    csrf: "",
+    get csrf() {
+      return getCsrfToken();
+    },
+    set csrf(value) {
+      setCsrfToken(value);
+    },
     currentUserId: 0,
     activeTicketId: 0,
     channels: new Map(),
@@ -42,6 +190,7 @@
     pendingMutations: 0,
     widgetPosition: "bottom-right",
     isDragging: false,
+    inviteRefreshTimer: null,
   };
 
   const ui = {
@@ -59,118 +208,10 @@
     obstructionElements = Array.from(document.body.querySelectorAll("header, footer, nav, .navbar, .fixed-top, .fixed-bottom, .sticky-top"));
   };
 
-  const channelKey = (ticketsId, roomType) => `${ticketsId}:${roomType}`;
   const maxOpenChats = () => (window.innerWidth <= 980 ? MOBILE_MAX_OPEN : DESKTOP_MAX_OPEN);
-  const SAFE_BOTTOM_MARGIN_PX = 8;
-
-  const submitForm = (form) => {
-    if (typeof form.requestSubmit === "function") {
-      form.requestSubmit();
-    } else {
-      form.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
-    }
-  };
-
-  const isVisibleElement = (element) => {
-    const style = window.getComputedStyle(element);
-    if (style.display === "none" || style.visibility === "hidden") {
-      return false;
-    }
-    return Number(style.opacity || "1") > 0;
-  };
-
-  const detectBottomObstruction = () => {
-    const viewportHeight = window.innerHeight || 0;
-    const viewportWidth = window.innerWidth || 0;
-    let maxObstruction = 0;
-
-    for (const element of obstructionElements) {
-      if (!(element instanceof HTMLElement)) {
-        continue;
-      }
-      if (element.classList.contains("glpichat-widget") || element.closest(".glpichat-widget")) {
-        continue;
-      }
-      const style = window.getComputedStyle(element);
-      if (style.position !== "fixed" && style.position !== "sticky") {
-        continue;
-      }
-      if (!isVisibleElement(element)) {
-        continue;
-      }
-      const rect = element.getBoundingClientRect();
-      if (rect.height <= 0 || rect.width <= 0) {
-        continue;
-      }
-      if (rect.bottom < viewportHeight - 2) {
-        continue;
-      }
-      if (rect.width < Math.min(220, viewportWidth * 0.2)) {
-        continue;
-      }
-      if (rect.left > viewportWidth * 0.8) {
-        continue;
-      }
-      const obstruction = Math.max(0, viewportHeight - rect.top);
-      if (obstruction > maxObstruction) {
-        maxObstruction = obstruction;
-      }
-    }
-
-    return maxObstruction;
-  };
-
-  const detectTopObstruction = () => {
-    const viewportWidth = window.innerWidth || 0;
-    let maxObstruction = 0;
-
-    for (const element of obstructionElements) {
-      if (!(element instanceof HTMLElement)) {
-        continue;
-      }
-      if (element.classList.contains("glpichat-widget") || element.closest(".glpichat-widget")) {
-        continue;
-      }
-      const style = window.getComputedStyle(element);
-      if (style.position !== "fixed" && style.position !== "sticky") {
-        continue;
-      }
-      if (!isVisibleElement(element)) {
-        continue;
-      }
-      const rect = element.getBoundingClientRect();
-      if (rect.height <= 0 || rect.width <= 0) {
-        continue;
-      }
-      if (rect.top > 2) {
-        continue;
-      }
-      if (rect.width < Math.min(220, viewportWidth * 0.2)) {
-        continue;
-      }
-      const obstruction = Math.max(0, rect.bottom);
-      if (obstruction > maxObstruction) {
-        maxObstruction = obstruction;
-      }
-    }
-
-    return maxObstruction;
-  };
-
-  const updateSafeBottom = () => {
-    const obstruction = detectBottomObstruction();
-    const safeBottom = Math.max(0, obstruction) + SAFE_BOTTOM_MARGIN_PX;
-    document.documentElement.style.setProperty("--glpichat-safe-bottom", `${safeBottom}px`);
-
-    const topObstruction = detectTopObstruction();
-    const safeTop = Math.max(0, topObstruction) + SAFE_BOTTOM_MARGIN_PX;
-    document.documentElement.style.setProperty("--glpichat-safe-top", `${safeTop}px`);
-  };
-
-  const isLeftPosition = () => state.widgetPosition === "bottom-left" || state.widgetPosition === "top-left";
 
   const insertBoxInDock = (box) => {
-    if (isLeftPosition()) {
+    if (isLeftPosition(state.widgetPosition)) {
       // Left positions: launcher is at the start (visually left due to row-reverse),
       // insert box before the launcher so it appears to its right
       ui.dock.insertBefore(box, ui.launcher);
@@ -226,99 +267,16 @@
       if (timeoutId) clearTimeout(timeoutId);
       panel.classList.remove("is-closing");
       panel.removeEventListener("animationend", onEnd);
-      panel.removeEventListener("transitionend", onEnd);
       delete panel._cancelClose;
     };
     
     panel._cancelClose = cleanup;
     
     panel.addEventListener("animationend", onEnd);
-    panel.addEventListener("transitionend", onEnd);
-    timeoutId = setTimeout(onEnd, 200);
+    timeoutId = setTimeout(onEnd, 150);
   };
 
-  const storageLoad = () => {
-    try {
-      return JSON.parse(localStorage.getItem("glpichat_widget_ui") || "{}");
-    } catch (_err) {
-      return {};
-    }
-  };
 
-  const storageSave = (patch) => {
-    const merged = { ...storageLoad(), ...patch };
-    localStorage.setItem("glpichat_widget_ui", JSON.stringify(merged));
-  };
-
-  const loadUiState = () => {
-    const data = storageLoad();
-    state.openTicketIds = Array.isArray(data.openTicketIds)
-      ? data.openTicketIds.filter((id) => Number.isInteger(id) && id > 0)
-      : [];
-    state.closedTicketIds = new Set(
-      Array.isArray(data.closedTicketIds)
-        ? data.closedTicketIds.filter((id) => Number.isInteger(id) && id > 0)
-        : []
-    );
-    state.manualTicketIds = new Set(
-      Array.isArray(data.manualTicketIds)
-        ? data.manualTicketIds.filter((id) => Number.isInteger(id) && id > 0)
-        : []
-    );
-    state.launcherOpen = data.launcherOpen === true;
-    if (typeof data.widgetPosition === "string" && VALID_POSITIONS.includes(data.widgetPosition)) {
-      state.widgetPosition = data.widgetPosition;
-    }
-  };
-
-  const saveUiState = () => {
-    const persistentOpenTicketIds = state.openTicketIds.filter((id) => state.manualTicketIds.has(id));
-    storageSave({
-      openTicketIds: persistentOpenTicketIds,
-      closedTicketIds: Array.from(state.closedTicketIds),
-      manualTicketIds: Array.from(state.manualTicketIds),
-      launcherOpen: state.launcherOpen,
-      widgetPosition: state.widgetPosition,
-    });
-  };
-
-  let activeRequestPromise = Promise.resolve();
-
-  const fetchJson = async (url, options) => {
-    const nextPromise = activeRequestPromise.then(async () => {
-      if (options && options.body instanceof FormData) {
-        if (options.body.has("_glpi_csrf_token")) {
-          options.body.set("_glpi_csrf_token", state.csrf);
-        }
-      }
-      const response = await fetch(url, options || { credentials: "same-origin" });
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || "Request failed.");
-      }
-      if (data._glpi_csrf_token) {
-        state.csrf = data._glpi_csrf_token;
-      }
-      return data;
-    });
-
-    activeRequestPromise = nextPromise.catch(() => {});
-    return nextPromise;
-  };
-
-  const postForm = async (url, formData, requestOptions = {}) => fetchJson(url, {
-    method: "POST",
-    body: formData,
-    credentials: "same-origin",
-    ...requestOptions,
-  });
-
-  const sanitize = (text) => String(text || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
 
   const activeTicketIdFromPage = () => {
     try {
@@ -347,11 +305,14 @@
   };
 
   const setChannel = (payload) => {
+    if (!payload || !isValidRoomType(payload.room_type)) {
+      return;
+    }
     const key = channelKey(payload.tickets_id, payload.room_type);
     const prev = state.channels.get(key) || {};
     const previousMessages = Array.isArray(prev.messages) ? prev.messages : [];
     const previousLastLoadedMessageId = previousMessages.length > 0
-      ? Number(previousMessages[previousMessages.length - 1].id || prev.last_message_id || 0)
+      ? Number(previousMessages.at(-1).id || prev.last_message_id || 0)
       : Number(prev.last_message_id || 0);
     const merged = {
       ...prev,
@@ -363,7 +324,7 @@
       older_loading: false,
       history_failed: false,
       last_message_id: previousLastLoadedMessageId,
-      last_event_id: Number(prev.last_event_id || payload.last_event_id || 0),
+      last_event_id: pickLatestEventCursor(prev.last_event_id, payload.last_event_id),
       unread_count: Number(prev.unread_count || payload.unread_count || 0),
     };
     if (Object.prototype.hasOwnProperty.call(payload, "unread_count")) {
@@ -372,9 +333,11 @@
     state.channels.set(key, merged);
 
     const ticket = ensureTicket(payload.tickets_id);
-    ticket.channels[payload.room_type] = key;
-    ticket.status = Number(payload.ticket_status || ticket.status || 0);
-    if (!ticket.activeTab || !ticket.channels[ticket.activeTab]) {
+    if (isValidRoomType(payload.room_type)) {
+      ticket.channels[payload.room_type] = key;
+    }
+    updateTicketStatus(payload.tickets_id, payload.ticket_status || ticket.status || 0);
+    if (!ticket.activeTab || !isValidRoomType(ticket.activeTab) || !ticket.channels[ticket.activeTab]) {
       ticket.activeTab = payload.room_type;
     }
   };
@@ -424,6 +387,191 @@
     }
     return "Outros";
   };
+  const ticketStatusLabel = (statusCode) => {
+    const code = Number(statusCode || 0);
+    if (code === 5) {
+      return "Solucionado";
+    }
+    if (code === 6) {
+      return "Fechado";
+    }
+    return statusLabel(statusKeyFromCode(code));
+  };
+
+  const normalizedInviteText = (value) => String(value || "").trim().toLowerCase();
+  const inviteFlagEnabled = (value) => value === true || value === 1 || value === "1";
+
+  const inviteBadgeMeta = (status) => {
+    if (status === "active") {
+      return { label: "Convite ativo", badgeClass: "glpichat-badge-active" };
+    }
+    if (status === "expired") {
+      return { label: "Convite expirado", badgeClass: "glpichat-badge-expired" };
+    }
+    if (status === "revoked") {
+      return { label: "Convite revogado", badgeClass: "glpichat-badge-revoked" };
+    }
+    if (status === "accepted") {
+      return { label: "Link consumido", badgeClass: "glpichat-badge-accepted" };
+    }
+    return { label: "Status desconhecido", badgeClass: "glpichat-badge-neutral" };
+  };
+
+  const inviteSessionMeta = (status) => {
+    if (status === "active") {
+      return {
+        label: "Sessão ativa",
+        badgeClass: "glpichat-badge-session-active",
+        note: "Chat em andamento"
+      };
+    }
+    if (status === "timeout" || status === "expired") {
+      return {
+        label: "Sessão expirada",
+        badgeClass: "glpichat-badge-session-timeout",
+        note: "Sessão encerrada por inatividade"
+      };
+    }
+    if (status === "revoked" || status === "disconnected" || status === "cancelled") {
+      return {
+        label: "Sessão encerrada",
+        badgeClass: "glpichat-badge-session-ended",
+        note: "Chat encerrado manualmente"
+      };
+    }
+    if (status === "accepted") {
+      return {
+        label: "Link consumido",
+        badgeClass: "glpichat-badge-accepted",
+        note: "Aguardando estado detalhado da sessão"
+      };
+    }
+    return {
+      label: "Sem sessão",
+      badgeClass: "glpichat-badge-neutral",
+      note: "Convidado ainda não entrou no chat"
+    };
+  };
+
+  const deriveInviteState = (invite) => {
+    const inviteStatus = normalizedInviteText(invite.invite_status || invite.status);
+    const leftAt = String(invite.left_at || invite.session_left_at || invite.session_ended_at || "").trim();
+    const explicitSessionStatus = normalizedInviteText(invite.session_status);
+    const fallbackSessionStatus = inviteFlagEnabled(invite.is_session_active)
+      ? "active"
+      : (leftAt !== "" ? normalizedInviteText(invite.session_end_reason || invite.session_reason || "disconnected") : "");
+    const sessionStatus = explicitSessionStatus || fallbackSessionStatus;
+    const hasSessionTelemetry = sessionStatus !== ""
+      || leftAt !== ""
+      || inviteFlagEnabled(invite.is_session_active);
+
+    return {
+      inviteMeta: inviteBadgeMeta(inviteStatus),
+      sessionMeta: inviteSessionMeta(
+        sessionStatus !== "" ? sessionStatus : (inviteStatus === "accepted" ? "accepted" : "")
+      ),
+      canDisconnect: sessionStatus === "active" || (inviteStatus === "accepted" && !hasSessionTelemetry),
+      canRevoke: inviteStatus === "active",
+      canReissue: inviteStatus === "active" || inviteStatus === "expired" || inviteStatus === "revoked",
+      accessLabel: invite.was_accessed ? "Sim" : "Não"
+    };
+  };
+
+  const ticketIsArchived = (ticket) => TERMINAL_TICKET_STATUSES.has(Number(ticket?.status || 0));
+  const archivedChatMessage = (ticket) => `Este chamado está ${ticketStatusLabel(ticket?.status || 0).toLowerCase()}. O chat foi arquivado.`;
+
+  const updateTicketStatus = (ticketId, nextStatus) => {
+    const ticket = state.tickets.get(ticketId);
+    if (!ticket) {
+      return false;
+    }
+
+    const parsedStatus = Number(nextStatus || 0);
+    if (parsedStatus > 0) {
+      const changed = ticket.status !== parsedStatus;
+      ticket.status = parsedStatus;
+      return changed;
+    }
+
+    return false;
+  };
+
+
+
+  const buildTimelineItems = (channel) => {
+    const messages = Array.isArray(channel?.messages) ? channel.messages : [];
+    const events = Array.isArray(channel?.events) ? channel.events : [];
+    const timeline = [];
+
+    for (const msg of messages) {
+      timeline.push({
+        kind: "message",
+        sortKey: messageSortKey(msg),
+        data: msg,
+      });
+    }
+
+    for (const event of events) {
+      if (!isVisibleSystemEvent(event)) {
+        continue;
+      }
+
+      timeline.push({
+        kind: "event",
+        sortKey: eventSortKey(event),
+        data: event,
+      });
+    }
+
+    timeline.sort((left, right) => {
+      return left.sortKey.localeCompare(right.sortKey);
+    });
+    return timeline;
+  };
+
+  const applyComposerState = (ticketId) => {
+    const ticket = state.tickets.get(ticketId);
+    const box = document.getElementById(ticketBoxId(ticketId));
+    if (!ticket || !box) {
+      return;
+    }
+
+    const archived = ticketIsArchived(ticket);
+    const form = box.querySelector("[data-role='send-form']");
+    const empty = box.querySelector("[data-role='empty']");
+    if (!(form instanceof HTMLElement) || !(empty instanceof HTMLElement)) {
+      return;
+    }
+
+    const textarea = form.querySelector("textarea");
+    const fileInput = form.querySelector("input[type='file']");
+    const submitButton = form.querySelector("button[type='submit']");
+    const attachButton = form.querySelector(".glpichat-attach");
+
+    form.hidden = archived;
+    if (textarea instanceof HTMLTextAreaElement) {
+      textarea.disabled = archived;
+      textarea.readOnly = archived;
+      textarea.placeholder = archived ? archivedChatMessage(ticket) : "Escreva uma mensagem...";
+    }
+    if (fileInput instanceof HTMLInputElement) {
+      fileInput.disabled = archived;
+    }
+    if (submitButton instanceof HTMLButtonElement) {
+      submitButton.disabled = archived;
+    }
+    if (attachButton instanceof HTMLElement) {
+      attachButton.style.pointerEvents = archived ? "none" : "";
+      attachButton.style.opacity = archived ? "0.5" : "";
+    }
+
+    if (archived) {
+      empty.hidden = false;
+      empty.textContent = archivedChatMessage(ticket);
+    }
+  };
+
+
 
   const createShell = () => {
     const root = document.createElement("div");
@@ -650,11 +798,12 @@
     if (ui.launcher) {
       ui.launcher.classList.add("is-closing");
     }
+    state.launcherOpen = false;
+    saveUiState(state);
+
     const performMinimize = () => {
-      state.launcherOpen = false;
       if (ui.launcherPanel) ui.launcherPanel.hidden = true;
       if (ui.launcher) ui.launcher.classList.remove("is-open", "is-closing");
-      saveUiState();
     };
     animatePanelClose(ui.launcherPanel, performMinimize);
   };
@@ -670,8 +819,10 @@
     }
     if (ui.launcher) {
       ui.launcher.classList.add("is-open");
+      ui.launcher.classList.remove("is-closing");
     }
-    saveUiState();
+    saveUiState(state);
+    renderLauncherNotifications();
     if (state.activeTicketId > 0) {
       refreshInvites(state.activeTicketId).catch(console.error);
     }
@@ -683,60 +834,46 @@
       openTicketIds: state.openTicketIds.slice(),
     };
 
-    const panelsToAnimate = [];
     if (!ui.launcherPanel.hidden) {
       if (ui.launcher) {
         ui.launcher.classList.add("is-closing");
       }
-      panelsToAnimate.push({
-        panel: ui.launcherPanel,
-        cleanup: () => {
-          ui.launcherPanel.hidden = true;
-          if (ui.launcher) {
-            ui.launcher.classList.remove("is-open", "is-closing");
-          }
-        }
-      });
+      if (ui.launcherPanel) {
+        ui.launcherPanel.classList.add("is-closing");
+      }
     }
-    for (const ticketId of state.openTicketIds) {
+    for (const ticketId of state.minimizedSnapshot.openTicketIds) {
       const box = document.getElementById(ticketBoxId(ticketId));
       const panel = box ? box.querySelector(".glpichat-chatbox-panel") : null;
       if (panel && !panel.hidden) {
         if (box) {
           box.classList.add("is-closing");
         }
-        panelsToAnimate.push({
-          panel,
-          cleanup: () => {
-            if (box) box.remove();
-          }
-        });
+        panel.classList.add("is-closing");
       }
     }
 
-    const finalize = () => {
-      state.launcherOpen = false;
-      state.openTicketIds = [];
-      saveUiState();
-      renderDock();
-    };
+    state.launcherOpen = false;
+    state.openTicketIds = [];
+    saveUiState(state);
+    renderDock();
 
-    if (panelsToAnimate.length > 0) {
-      let completed = 0;
-      const onPanelCompleted = () => {
-        completed++;
-        if (completed === panelsToAnimate.length) {
-          finalize();
+    if (!ui.launcherPanel.hidden) {
+      animatePanelClose(ui.launcherPanel, () => {
+        ui.launcherPanel.hidden = true;
+        if (ui.launcher) {
+          ui.launcher.classList.remove("is-open", "is-closing");
         }
-      };
-      for (const item of panelsToAnimate) {
-        animatePanelClose(item.panel, () => {
-          item.cleanup();
-          onPanelCompleted();
+      });
+    }
+    for (const ticketId of state.minimizedSnapshot.openTicketIds) {
+      const box = document.getElementById(ticketBoxId(ticketId));
+      const panel = box ? box.querySelector(".glpichat-chatbox-panel") : null;
+      if (panel && !panel.hidden) {
+        animatePanelClose(panel, () => {
+          if (box) box.remove();
         });
       }
-    } else {
-      finalize();
     }
   };
 
@@ -810,6 +947,7 @@
         <div class="glpichat-tabs" data-role="tabs"></div>
         <div class="glpichat-empty" data-role="empty" hidden></div>
         <div class="glpichat-messages" data-role="messages"></div>
+        <div class="glpichat-typing-indicator" data-role="typing-indicator" hidden></div>
         <form class="glpichat-send" data-role="send-form">
           <input id="attach-${ticketId}" class="glpichat-file-input" type="file" name="file">
           <label for="attach-${ticketId}" class="glpichat-attach" title="Anexar arquivo">
@@ -858,18 +996,24 @@
     panel.addEventListener("drop", (e) => {
       e.preventDefault();
       panel.classList.remove("drag-over");
-      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-        fileInput.files = e.dataTransfer.files;
+      const droppedFile = firstFileFromTransfer(e.dataTransfer);
+      if (assignSingleFileToInput(fileInput, droppedFile)) {
         submitForm(sendForm);
       }
     });
 
     // Ctrl+V paste support for clipboard files
     textarea.addEventListener("paste", (e) => {
-      if (e.clipboardData && e.clipboardData.files && e.clipboardData.files.length > 0) {
-        fileInput.files = e.clipboardData.files;
+      const pastedFile = firstFileFromTransfer(e.clipboardData);
+      if (assignSingleFileToInput(fileInput, pastedFile)) {
         submitForm(sendForm);
         e.preventDefault();
+      }
+    });
+
+    fileInput.addEventListener("change", () => {
+      if (fileInput.files instanceof FileList && fileInput.files.length > 0) {
+        submitForm(sendForm);
       }
     });
 
@@ -881,13 +1025,46 @@
       }
     });
 
+    let typingTimeout = null;
+    textarea.addEventListener("input", () => {
+      const ticket = state.tickets.get(ticketId);
+      if (!ticket) return;
+      const activeTab = isValidRoomType(ticket.activeTab) ? ticket.activeTab : "public";
+      const key = ticket.channels[activeTab];
+      const channel = state.channels.get(key);
+      if (!channel) return;
+
+      if (!channel.isTyping) {
+        channel.isTyping = true;
+        pollChannels().catch(console.error);
+      }
+
+      if (typingTimeout) clearTimeout(typingTimeout);
+      typingTimeout = setTimeout(() => {
+        channel.isTyping = false;
+        pollChannels().catch(console.error);
+      }, 3000);
+    });
+
     sendForm.addEventListener("submit", async (event) => {
       event.preventDefault();
+      if (sendForm.hidden) {
+        return;
+      }
       const ticket = state.tickets.get(ticketId);
       if (!ticket) {
         return;
       }
-      const activeRoom = ticket.activeTab;
+      const activeRoom = isValidRoomType(ticket.activeTab) ? ticket.activeTab : "public";
+      const activeKey = ticket.channels[activeRoom];
+      const activeChannel = activeKey ? state.channels.get(activeKey) : null;
+      if (activeChannel) {
+        activeChannel.isTyping = false;
+        if (typingTimeout) {
+          clearTimeout(typingTimeout);
+          typingTimeout = null;
+        }
+      }
       const fd = new FormData(sendForm);
       const content = String(fd.get("content") || "").trim();
       const file = fd.get("file");
@@ -929,7 +1106,7 @@
           channel.messages = [];
         }
         channel.messages.push(tempMsg);
-        renderTicketMessages(ticketId);
+        renderTicketMessages(ticketId, { forceScroll: true });
       }
 
       if (textarea) {
@@ -945,13 +1122,19 @@
           state.transientTicketIds.delete(ticketId);
           state.closedTicketIds.delete(ticketId);
           // keepalive improves odds of completing small POSTs during accidental refresh/navigation.
-          await postForm(`${pluginBase}/Send`, fd, { keepalive: true });
+          const sendResult = await postForm(`${pluginBase}/Send`, fd, { keepalive: true });
+          if (channel && reconcileConfirmedMessage(channel, tempMsg, sendResult.message || null)) {
+            renderTicketMessages(ticketId, { forceScroll: true });
+          }
         }
         if (hasFile) {
           state.manualTicketIds.add(ticketId);
           state.transientTicketIds.delete(ticketId);
           state.closedTicketIds.delete(ticketId);
-          await postForm(`${pluginBase}/Upload`, fd);
+          const uploadResult = await postForm(`${pluginBase}/Upload`, fd);
+          if (channel && reconcileConfirmedMessage(channel, tempMsg, uploadResult.message || null)) {
+            renderTicketMessages(ticketId, { forceScroll: true });
+          }
         }
       } catch (err) {
         // Rollback optimistic message on error
@@ -970,7 +1153,7 @@
         }
       }
 
-      saveUiState();
+      saveUiState(state);
 
       if (channel && tempMsg) {
         setTimeout(() => {
@@ -1020,21 +1203,27 @@
       });
       tabs.appendChild(btn);
     }
+
+    applyComposerState(ticketId);
   };
 
   const renderTicketMessages = (ticketId, options = {}) => {
     const preservePosition = options.preservePosition === true;
+    const forceScroll = options.forceScroll === true;
     const ticket = state.tickets.get(ticketId);
     const box = document.getElementById(ticketBoxId(ticketId));
     if (!ticket || !box) {
       return;
     }
-    const key = ticket.channels[ticket.activeTab];
+    const activeTab = isValidRoomType(ticket.activeTab) ? ticket.activeTab : "public";
+    const key = ticket.channels[activeTab];
     const channel = key ? state.channels.get(key) : null;
     const empty = box.querySelector("[data-role='empty']");
     const messagesNode = box.querySelector("[data-role='messages']");
     const previousHeight = messagesNode.scrollHeight;
     const previousTop = messagesNode.scrollTop;
+    const wasNearBottom = isNodeNearBottom(messagesNode);
+    const shouldPreserveSelection = hasSelectionInsideNode(messagesNode);
 
     // Render skeleton loading screen if loading
     if (channel && channel.history_loading === true) {
@@ -1058,23 +1247,57 @@
         </div>
       `;
       messagesNode.scrollTop = messagesNode.scrollHeight;
+      delete messagesNode.dataset.renderedSignature;
       return;
     }
 
-    const messages = Array.isArray(channel?.messages) ? channel.messages : [];
+    const signature = channel
+      ? `${channel.messages?.length || 0}_${channel.messages?.at(-1)?.id || 0}_${channel.events?.length || 0}_${ticket.activeTab}`
+      : '';
+    const isSameSignature = messagesNode.dataset.renderedSignature === signature;
+
+    if (isSameSignature) {
+      renderTypingIndicator(ticketId);
+      applyComposerState(ticketId);
+      recalcUnread(ticket);
+      renderDock();
+      if (forceScroll) {
+        messagesNode.scrollTop = messagesNode.scrollHeight;
+      }
+      return;
+    }
+    messagesNode.dataset.renderedSignature = signature;
+
+    const timeline = buildTimelineItems(channel);
     messagesNode.innerHTML = "";
 
-    if (messages.length === 0) {
-      empty.hidden = false;
-      empty.textContent = ticket.activeTab === "internal"
-        ? "Nenhuma mensagem na discussão técnica ainda."
-        : "Nenhuma mensagem com o solicitante ainda.";
+    if (timeline.length === 0) {
+      if (!ticketIsArchived(ticket)) {
+        empty.hidden = false;
+        empty.textContent = ticket.activeTab === "internal"
+          ? "Nenhuma mensagem na discussão técnica ainda."
+          : "Nenhuma mensagem com o solicitante ainda.";
+      }
     } else {
       empty.hidden = true;
       if (channel && !channel.renderedMessageIds) {
         channel.renderedMessageIds = new Set();
       }
-      for (const msg of messages) {
+      for (const entry of timeline) {
+        if (entry.kind === "event") {
+          const event = entry.data;
+          const item = document.createElement("div");
+          item.className = "glpichat-message is-system";
+          item.innerHTML = `
+            <div class="glpichat-message-head">Sistema</div>
+            <div class="glpichat-message-body">${sanitize(formatSystemEventMessage(event))}</div>
+            <div class="glpichat-message-time">${sanitize(event.date_creation || "")}</div>
+          `;
+          messagesNode.appendChild(item);
+          continue;
+        }
+
+        const msg = entry.data;
         const own = msg.actor_type === "user" && Number(msg.users_id || 0) === Number(state.currentUserId || 0);
         const system = msg.actor_type !== "user" && msg.actor_type !== "guest";
         const item = document.createElement("div");
@@ -1128,12 +1351,16 @@
         `;
         messagesNode.appendChild(item);
       }
-      const lastId = Number(messages[messages.length - 1].id || 0);
+      const messages = Array.isArray(channel?.messages) ? channel.messages : [];
+      const lastId = Number(messages.at(-1).id || 0);
       if (channel && lastId > 0) {
         markRead(channel.rooms_id, lastId).catch(console.error);
       }
     }
 
+    renderTypingIndicator(ticketId);
+
+    applyComposerState(ticketId);
     recalcUnread(ticket);
     renderDock();
     if (preservePosition) {
@@ -1141,7 +1368,38 @@
       messagesNode.scrollTop = Math.max(0, previousTop + delta);
       return;
     }
-    messagesNode.scrollTop = messagesNode.scrollHeight;
+
+    if (forceScroll || (!shouldPreserveSelection && (wasNearBottom || previousHeight === 0))) {
+      messagesNode.scrollTop = messagesNode.scrollHeight;
+      return;
+    }
+
+    const maxTop = Math.max(0, messagesNode.scrollHeight - messagesNode.clientHeight);
+    messagesNode.scrollTop = Math.min(previousTop, maxTop);
+  };
+
+  const renderTypingIndicator = (ticketId) => {
+    const ticket = state.tickets.get(ticketId);
+    const box = document.getElementById(ticketBoxId(ticketId));
+    if (!ticket || !box) {
+      return;
+    }
+
+    const activeTab = isValidRoomType(ticket.activeTab) ? ticket.activeTab : "public";
+    const key = ticket.channels[activeTab];
+    const channel = key ? state.channels.get(key) : null;
+    const typingIndicator = box.querySelector("[data-role='typing-indicator']");
+    if (!(typingIndicator instanceof HTMLElement)) {
+      return;
+    }
+
+    if (channel && Array.isArray(channel.typing_names) && channel.typing_names.length > 0) {
+      typingIndicator.textContent = formatTypingMessage(channel.typing_names);
+      typingIndicator.hidden = false;
+      return;
+    }
+
+    typingIndicator.hidden = true;
   };
 
   const enforceOpenLimit = () => {
@@ -1185,6 +1443,7 @@
 
     const openedBox = document.getElementById(ticketBoxId(ticketId));
     openedBox.classList.add("is-open");
+    openedBox.classList.remove("is-closing");
     const panel = openedBox.querySelector(".glpichat-chatbox-panel");
     if (panel) {
       if (panel._cancelClose) {
@@ -1196,7 +1455,8 @@
       void panel.offsetHeight;
     }
     const ticket = state.tickets.get(ticketId);
-    const activeKey = ticket ? ticket.channels[ticket.activeTab] : null;
+    const activeTab = ticket && isValidRoomType(ticket.activeTab) ? ticket.activeTab : "public";
+    const activeKey = ticket ? ticket.channels[activeTab] : null;
     if (activeKey) {
       try {
         await loadChannelHistory(state.channels.get(activeKey));
@@ -1206,16 +1466,37 @@
     }
     renderTicketTabs(ticketId);
     renderTicketMessages(ticketId);
-    saveUiState();
+    saveUiState(state);
     schedulePolling();
   };
 
+  const notifyLeaveRoom = (ticketId) => {
+    const ticket = state.tickets.get(ticketId);
+    const activeTab = ticket && isValidRoomType(ticket.activeTab) ? ticket.activeTab : "public";
+    const key = ticket ? ticket.channels[activeTab] : null;
+    const channel = key ? state.channels.get(key) : null;
+    if (channel && channel.rooms_id) {
+      const fd = new FormData();
+      fd.set("rooms_id", String(channel.rooms_id));
+      fd.set("_glpi_csrf_token", state.csrf);
+      postForm(`${pluginBase}/Widget/Leave`, fd).catch(console.error);
+    }
+  };
+
   const minimizeTicket = (ticketId) => {
+    notifyLeaveRoom(ticketId);
     const box = document.getElementById(ticketBoxId(ticketId));
     const panel = box ? box.querySelector(".glpichat-chatbox-panel") : null;
     if (box) {
       box.classList.add("is-closing");
     }
+    if (panel) {
+      panel.classList.add("is-closing");
+    }
+    state.openTicketIds = state.openTicketIds.filter((id) => id !== ticketId);
+    saveUiState(state);
+    renderDock();
+
     const performMinimize = () => {
       if (box) {
         box.classList.remove("is-open", "is-closing");
@@ -1224,8 +1505,6 @@
           panel.classList.remove("is-closing");
         }
       }
-      state.openTicketIds = state.openTicketIds.filter((id) => id !== ticketId);
-      saveUiState();
       renderDock();
     };
 
@@ -1233,19 +1512,24 @@
   };
 
   const closeTicket = (ticketId) => {
+    notifyLeaveRoom(ticketId);
     const box = document.getElementById(ticketBoxId(ticketId));
     const panel = box ? box.querySelector(".glpichat-chatbox-panel") : null;
     if (box) {
       box.classList.add("is-closing");
     }
+    if (panel) {
+      panel.classList.add("is-closing");
+    }
+    state.closedTicketIds.add(ticketId);
+    state.manualTicketIds.delete(ticketId);
+    state.transientTicketIds.delete(ticketId);
+    state.openTicketIds = state.openTicketIds.filter((id) => id !== ticketId);
+    saveUiState(state);
+    renderDock();
+
     const performClose = () => {
       if (box) box.remove();
-      state.closedTicketIds.add(ticketId);
-      state.manualTicketIds.delete(ticketId);
-      state.transientTicketIds.delete(ticketId);
-      state.openTicketIds = state.openTicketIds.filter((id) => id !== ticketId);
-      saveUiState();
-      renderDock();
     };
 
     animatePanelClose(panel, performClose);
@@ -1323,12 +1607,15 @@
     launcherBadge.textContent = totalUnread > 0 ? String(totalUnread) : "";
     launcherBadge.style.display = totalUnread > 0 ? "inline-flex" : "none";
     if (dirtyUiState) {
-      saveUiState();
+      saveUiState(state);
     }
     renderLauncherNotifications();
   };
 
   const renderLauncherNotifications = () => {
+    if (!state.launcherOpen) {
+      return;
+    }
     const statusFilters = `
       <div class="glpichat-status-filters">
         <button type="button" class="glpichat-status-filter ${state.statusFilter === "new" ? "is-active" : ""}" data-filter="new">Novo</button>
@@ -1389,165 +1676,234 @@
     });
   };
 
-  const refreshInvites = async (ticketsId, lastCreatedUrl = null, reissuedInviteId = null) => {
-    if (!ui.launcherInvites) {
+  const clearInviteRefreshTimer = () => {
+    if (state.inviteRefreshTimer !== null) {
+      window.clearTimeout(state.inviteRefreshTimer);
+      state.inviteRefreshTimer = null;
+    }
+  };
+
+  const copyInviteLink = (copyBtn, inviteUrl) => {
+    navigator.clipboard.writeText(inviteUrl).then(() => {
+      copyBtn.textContent = "Copiado!";
+      copyBtn.classList.add("copied");
+      window.setTimeout(() => {
+        copyBtn.textContent = "Copiar";
+        copyBtn.classList.remove("copied");
+      }, 2000);
+    }).catch((err) => {
+      console.error("Falha ao copiar:", err);
+      alert("Por favor, copie o link manualmente.");
+    });
+  };
+
+  const renderInviteSuccessBanner = (inviteUrl, title) => {
+    const successBanner = document.createElement("div");
+    successBanner.className = "glpichat-invite-success";
+    successBanner.innerHTML = `
+      <div class="glpichat-invite-success-text">${sanitize(title)}</div>
+      <div class="glpichat-invite-success-row">
+        <input type="text" readonly value="${sanitize(inviteUrl)}">
+        <button type="button" class="glpichat-copy-btn">Copiar</button>
+      </div>
+    `;
+    const copyBtn = successBanner.querySelector(".glpichat-copy-btn");
+    copyBtn.addEventListener("click", () => copyInviteLink(copyBtn, inviteUrl));
+    return successBanner;
+  };
+
+  const inviteStatusLabel = (status) => {
+    if (status === "accepted") {
+      return "Aceito";
+    }
+    if (status === "revoked") {
+      return "Revogado";
+    }
+    if (status === "expired") {
+      return "Expirado";
+    }
+    if (status === "active") {
+      return "Ativo";
+    }
+    return "Nao iniciado";
+  };
+
+  const sessionStatusLabel = (status) => {
+    if (status === "active") {
+      return "Ativa";
+    }
+    if (status === "ended") {
+      return "Encerrada";
+    }
+    return "Sem sessão";
+  };
+
+  const scheduleInviteRefresh = (ticketsId, targetContainer) => {
+    clearInviteRefreshTimer();
+    state.inviteRefreshTimer = window.setTimeout(async () => {
+      const currentContainer = targetContainer || ui.launcherInvites;
+      if (!currentContainer || ui.launcherInvites !== currentContainer) {
+        clearInviteRefreshTimer();
+        return;
+      }
+
+      const inviteForm = currentContainer.querySelector(".glpichat-invite");
+      const focusedElement = document.activeElement;
+      const isEditingForm = focusedElement instanceof HTMLElement
+        && inviteForm instanceof HTMLElement
+        && inviteForm.contains(focusedElement);
+
+      if (!isEditingForm) {
+        try {
+          await refreshInvites(ticketsId, null, null, currentContainer);
+        } catch (error) {
+          console.error("Falha ao atualizar gestão de invites:", error);
+        }
+      }
+
+      if (ui.launcherInvites === currentContainer) {
+        scheduleInviteRefresh(ticketsId, currentContainer);
+      }
+    }, INVITE_REFRESH_MS);
+  };
+
+  const refreshInvites = async (ticketsId, lastCreatedUrl = null, reissuedInviteId = null, targetContainer = ui.launcherInvites) => {
+    if (!targetContainer) {
       return;
     }
-    ui.launcherInvites.innerHTML = "";
+    clearInviteRefreshTimer();
 
-    const head = document.createElement("div");
-    head.className = "glpichat-invite-head";
-    head.innerHTML = `<strong>Convites para Chamado #${ticketsId}</strong>`;
+    const canCreate = targetContainer.dataset.canCreate === "1";
+    const canUpdate = targetContainer.dataset.canUpdate === "1";
 
-    const form = document.createElement("div");
-    form.className = "glpichat-invite";
-    form.innerHTML = `
-      <div class="glpichat-invite-field">
-        <input type="text" name="guest_name" placeholder="Nome do convidado" required>
-        <span class="glpichat-field-error" data-error-for="guest_name"></span>
-      </div>
-      <div class="glpichat-invite-field">
-        <input type="email" name="guest_email" placeholder="Email do convidado (opcional)">
-        <span class="glpichat-field-error" data-error-for="guest_email"></span>
-      </div>
-      <button type="button" data-role="submit-btn">Criar invite</button>
-      <div data-role="result"></div>
-    `;
+    let isInitialized = targetContainer.querySelector(".glpichat-invite-head") !== null;
+    let resultDiv = targetContainer.querySelector("[data-role='result']");
 
-    const nameInput = form.querySelector("[name='guest_name']");
-    const emailInput = form.querySelector("[name='guest_email']");
-    const nameError = form.querySelector("[data-error-for='guest_name']");
-    const emailError = form.querySelector("[data-error-for='guest_email']");
+    if (!isInitialized) {
+      targetContainer.innerHTML = "";
 
-    const checkName = () => {
-      if (nameInput.value.trim() === "") {
-        nameError.textContent = "Por favor, informe o nome do convidado.";
-        nameInput.classList.add("is-invalid");
-        return false;
-      } else {
+      const head = document.createElement("div");
+      head.className = "glpichat-invite-head";
+      head.innerHTML = `<strong>Convites para Chamado #${ticketsId}</strong>`;
+
+      targetContainer.appendChild(head);
+
+    if (canCreate) {
+      const form = document.createElement("div");
+      form.className = "glpichat-invite";
+      form.innerHTML = `
+        <div class="glpichat-invite-field">
+          <input type="text" name="guest_name" placeholder="Nome do convidado" required>
+          <span class="glpichat-field-error" data-error-for="guest_name"></span>
+        </div>
+        <div class="glpichat-invite-field">
+          <input type="email" name="guest_email" placeholder="Email do convidado (opcional)">
+          <span class="glpichat-field-error" data-error-for="guest_email"></span>
+        </div>
+        <button type="button" data-role="submit-btn">Criar invite</button>
+        <div data-role="result"></div>
+      `;
+
+      const nameInput = form.querySelector("[name='guest_name']");
+      const emailInput = form.querySelector("[name='guest_email']");
+      const nameError = form.querySelector("[data-error-for='guest_name']");
+      const emailError = form.querySelector("[data-error-for='guest_email']");
+      resultDiv = form.querySelector("[data-role='result']");
+
+      const checkName = () => {
+        if (nameInput.value.trim() === "") {
+          nameError.textContent = "Por favor, informe o nome do convidado.";
+          nameInput.classList.add("is-invalid");
+          return false;
+        }
+
         nameError.textContent = "";
         nameInput.classList.remove("is-invalid");
         return true;
-      }
-    };
+      };
 
-    const checkEmail = () => {
-      const email = emailInput.value.trim();
-      if (email !== "" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        emailError.textContent = "Por favor, insira um e-mail válido (ex: nome@dominio.com).";
-        emailInput.classList.add("is-invalid");
-        return false;
-      } else {
+      const checkEmail = () => {
+        const email = emailInput.value.trim();
+        if (email !== "" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          emailError.textContent = "Por favor, insira um e-mail válido (ex: nome@dominio.com).";
+          emailInput.classList.add("is-invalid");
+          return false;
+        }
+
         emailError.textContent = "";
         emailInput.classList.remove("is-invalid");
         return true;
-      }
-    };
+      };
 
-    nameInput.addEventListener("input", checkName);
-    nameInput.addEventListener("blur", checkName);
-    emailInput.addEventListener("input", checkEmail);
-    emailInput.addEventListener("blur", checkEmail);
+      const submitInvite = async () => {
+        const isNameValid = checkName();
+        const isEmailValid = checkEmail();
+        if (!isNameValid || !isEmailValid) {
+          return;
+        }
 
-    const submitInvite = async () => {
-      const isNameValid = checkName();
-      const isEmailValid = checkEmail();
-      if (!isNameValid || !isEmailValid) {
-        return;
-      }
-      const submitBtn = form.querySelector("[data-role='submit-btn']");
-      if (submitBtn) {
+        const submitBtn = form.querySelector("[data-role='submit-btn']");
         submitBtn.disabled = true;
         submitBtn.textContent = "Criando...";
-      }
-      try {
-        const fd = new FormData();
-        fd.set("guest_name", nameInput.value.trim());
-        fd.set("guest_email", emailInput.value.trim());
-        fd.set("tickets_id", String(ticketsId));
-        fd.set("_glpi_csrf_token", state.csrf);
-        const created = await postForm(`${pluginBase}/Invite`, fd);
-        await refreshInvites(ticketsId, created.url, null);
-      } catch (err) {
-        alert("Erro ao criar convite: " + err.message);
-        if (submitBtn) {
+
+        try {
+          const fd = new FormData();
+          fd.set("guest_name", nameInput.value.trim());
+          fd.set("guest_email", emailInput.value.trim());
+          fd.set("tickets_id", String(ticketsId));
+          fd.set("_glpi_csrf_token", state.csrf);
+          const created = await postForm(`${pluginBase}/Invite`, fd);
+          await refreshInvites(ticketsId, created.url, null, targetContainer);
+        } catch (err) {
+          alert("Erro ao criar convite: " + err.message);
           submitBtn.disabled = false;
           submitBtn.textContent = "Criar invite";
         }
-      }
-    };
+      };
 
-    form.querySelector("[data-role='submit-btn']").addEventListener("click", submitInvite);
+      nameInput.addEventListener("input", checkName);
+      nameInput.addEventListener("blur", checkName);
+      emailInput.addEventListener("input", checkEmail);
+      emailInput.addEventListener("blur", checkEmail);
+      form.querySelector("[data-role='submit-btn']").addEventListener("click", submitInvite);
 
-    const handleKeyPress = (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        submitInvite();
-      }
-    };
-    nameInput.addEventListener("keydown", handleKeyPress);
-    emailInput.addEventListener("keydown", handleKeyPress);
+      const handleKeyPress = (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          submitInvite();
+        }
+      };
+      nameInput.addEventListener("keydown", handleKeyPress);
+      emailInput.addEventListener("keydown", handleKeyPress);
 
-    ui.launcherInvites.append(head, form);
+      targetContainer.appendChild(form);
+      resultDiv = form.querySelector("[data-role='result']");
+    }
+    }
 
-    if (lastCreatedUrl && !reissuedInviteId) {
-      const resultDiv = form.querySelector("[data-role='result']");
-      const successBanner = document.createElement("div");
-      successBanner.className = "glpichat-invite-success";
-      successBanner.innerHTML = `
-        <div class="glpichat-invite-success-text">Convite criado com sucesso!</div>
-        <div class="glpichat-invite-success-row">
-          <input type="text" readonly value="${sanitize(lastCreatedUrl)}">
-          <button type="button" class="glpichat-copy-btn">Copiar</button>
-        </div>
-      `;
-      const copyBtn = successBanner.querySelector(".glpichat-copy-btn");
-      copyBtn.addEventListener("click", () => {
-        navigator.clipboard.writeText(lastCreatedUrl).then(() => {
-          copyBtn.textContent = "Copiado!";
-          copyBtn.classList.add("copied");
-          setTimeout(() => {
-            copyBtn.textContent = "Copiar";
-            copyBtn.classList.remove("copied");
-          }, 2000);
-        }).catch((err) => {
-          console.error("Falha ao copiar:", err);
-          alert("Por favor, copie o link manualmente.");
-        });
-      });
-      resultDiv.appendChild(successBanner);
+    if (resultDiv instanceof HTMLElement && lastCreatedUrl && !reissuedInviteId) {
+      resultDiv.innerHTML = "";
+      resultDiv.appendChild(renderInviteSuccessBanner(lastCreatedUrl, "Convite criado com sucesso!"));
     }
 
     const listData = await fetchJson(`${pluginBase}/Invite/List?tickets_id=${ticketsId}`, { credentials: "same-origin" });
-    const listContainer = document.createElement("div");
-    listContainer.className = "glpichat-invite-list";
+    
+    let listContainer = targetContainer.querySelector(".glpichat-invite-list");
+    if (!listContainer) {
+      listContainer = document.createElement("div");
+      listContainer.className = "glpichat-invite-list";
+      targetContainer.appendChild(listContainer);
+    } else {
+      listContainer.innerHTML = "";
+    }
 
     for (const invite of listData.invites || []) {
       const card = document.createElement("div");
       card.className = "glpichat-invite-card";
 
       const initials = String(invite.guest_name || "G").trim().substring(0, 2).toUpperCase();
-      const statusClass = String(invite.status).toLowerCase();
-      const isExpired = statusClass === "expired";
-      const isRevoked = statusClass === "revoked";
-      const isActive = statusClass === "active";
-      const isAccepted = statusClass === "accepted";
-
-      let statusLabelStr = invite.status || "";
-      let badgeClass = "glpichat-badge-active";
-      if (isExpired) {
-        statusLabelStr = "Expirado";
-        badgeClass = "glpichat-badge-expired";
-      } else if (isRevoked) {
-        statusLabelStr = "Revogado";
-        badgeClass = "glpichat-badge-revoked";
-      } else if (isActive) {
-        statusLabelStr = "Ativo";
-        badgeClass = "glpichat-badge-active";
-      } else if (isAccepted) {
-        statusLabelStr = "Aceito";
-        badgeClass = "glpichat-badge-accepted";
-      }
+      const inviteStatus = normalizedInviteText(invite.invite_status || invite.status);
+      const inviteState = deriveInviteState(invite);
 
       card.innerHTML = `
         <div class="glpichat-invite-avatar">${sanitize(initials)}</div>
@@ -1556,8 +1912,12 @@
           <span class="glpichat-invite-email" title="${sanitize(invite.guest_email || "Sem e-mail")}">${sanitize(invite.guest_email || "Sem e-mail")}</span>
         </div>
         <div class="glpichat-invite-meta">
-          <span class="glpichat-badge ${badgeClass}">${statusLabelStr}</span>
-          <span class="glpichat-invite-access">Acessou: ${invite.was_accessed ? "Sim" : "Não"}</span>
+          <div class="glpichat-invite-statuses">
+            <span class="glpichat-badge ${inviteState.inviteMeta.badgeClass}">${sanitize(inviteState.inviteMeta.label)}</span>
+            <span class="glpichat-badge ${inviteState.sessionMeta.badgeClass}">${sanitize(inviteState.sessionMeta.label)}</span>
+          </div>
+          <span class="glpichat-invite-status-note">${sanitize(inviteState.sessionMeta.note)}</span>
+          <span class="glpichat-invite-access">Acessou: ${inviteState.accessLabel}</span>
         </div>
         <div class="glpichat-invite-actions"></div>
       `;
@@ -1592,7 +1952,7 @@
         card.appendChild(reissueSuccess);
       }
 
-      if (isActive) {
+      if (inviteState.canReissue) {
         const reissueBtn = document.createElement("button");
         reissueBtn.type = "button";
         reissueBtn.textContent = "Reemitir";
@@ -1602,12 +1962,15 @@
           fd.set("_glpi_csrf_token", state.csrf);
           try {
             const result = await postForm(`${pluginBase}/Invite/Reissue`, fd);
-            await refreshInvites(ticketsId, result.url, invite.id);
+            await refreshInvites(ticketsId, result.url, invite.id, targetContainer);
           } catch (err) {
             alert("Erro ao reemitir convite: " + err.message);
           }
         });
+        actionsDiv.appendChild(reissueBtn);
+      }
 
+      if (inviteState.canRevoke) {
         const revokeBtn = document.createElement("button");
         revokeBtn.type = "button";
         revokeBtn.className = "action-revoke";
@@ -1621,37 +1984,38 @@
           fd.set("_glpi_csrf_token", state.csrf);
           try {
             await postForm(`${pluginBase}/Invite/Revoke`, fd);
-            await refreshInvites(ticketsId);
+            await refreshInvites(ticketsId, null, null, targetContainer);
           } catch (err) {
             alert("Erro ao cancelar convite: " + err.message);
           }
         });
+        actionsDiv.appendChild(revokeBtn);
+      }
 
-        actionsDiv.append(reissueBtn, revokeBtn);
-      } else if (isExpired || isRevoked) {
-        const reissueBtn = document.createElement("button");
-        reissueBtn.type = "button";
-        reissueBtn.textContent = "Reemitir";
-        reissueBtn.addEventListener("click", async () => {
+      if (inviteState.canDisconnect) {
+        const disconnectBtn = document.createElement("button");
+        disconnectBtn.type = "button";
+        disconnectBtn.className = "action-revoke";
+        disconnectBtn.textContent = "Encerrar Chat";
+        disconnectBtn.addEventListener("click", async () => {
+          if (!confirm("Deseja encerrar a sessao atual deste convidado?")) {
+            return;
+          }
           const fd = new FormData();
           fd.set("invite_id", String(invite.id));
           fd.set("_glpi_csrf_token", state.csrf);
           try {
-            const result = await postForm(`${pluginBase}/Invite/Reissue`, fd);
-            await refreshInvites(ticketsId, result.url, invite.id);
+            await postForm(`${pluginBase}/Invite/Revoke`, fd);
+            await refreshInvites(ticketsId, null, null, targetContainer);
           } catch (err) {
-            alert("Erro ao reemitir convite: " + err.message);
+            alert("Erro ao encerrar chat: " + err.message);
           }
         });
-        actionsDiv.appendChild(reissueBtn);
-      } else if (isAccepted) {
-        // No action buttons for accepted invites
+        actionsDiv.appendChild(disconnectBtn);
       }
 
       listContainer.appendChild(card);
     }
-
-    ui.launcherInvites.appendChild(listContainer);
   };
 
   const mountInviteManagement = async (container) => {
@@ -1663,8 +2027,42 @@
     if (csrf) {
       state.csrf = csrf;
     }
+    if (typeof container._glpiChatInviteTimer === "number") {
+      window.clearInterval(container._glpiChatInviteTimer);
+    }
     ui.launcherInvites = container;
-    await refreshInvites(ticketsId);
+    await refreshInvites(ticketsId, null, null, container);
+
+    let isVisible = true;
+    if ("IntersectionObserver" in window) {
+      isVisible = false;
+      const observer = new IntersectionObserver((entries) => {
+        isVisible = entries[0].isIntersecting;
+        if (isVisible) {
+          refreshInvites(ticketsId, null, null, container).catch(console.error);
+        }
+      }, { root: null, threshold: 0 });
+      observer.observe(container);
+    }
+
+    container._glpiChatInviteTimer = window.setInterval(() => {
+      if (!document.body.contains(container)) {
+        window.clearInterval(container._glpiChatInviteTimer);
+        delete container._glpiChatInviteTimer;
+        return;
+      }
+      if (document.hidden || !isVisible) {
+        return;
+      }
+      const tabPane = container.closest(".tab-pane");
+      if (tabPane && !tabPane.classList.contains("active")) {
+        return;
+      }
+      if (!isVisibleElement(container)) {
+        return;
+      }
+      refreshInvites(ticketsId, null, null, container).catch(console.error);
+    }, 10000);
   };
 
   const markRead = async (roomsId, lastReadMessageId) => {
@@ -1693,8 +2091,7 @@
     if (!Array.isArray(incomingMessages) || incomingMessages.length === 0) {
       return;
     }
-    const seen = new Set((channel.messages || []).map((item) => Number(item.id || 0)));
-    
+
     // Filter out optimistic messages if we see an incoming message from the current user
     // with the same content, or if the optimistic message is older than 15 seconds.
     const now = Date.now();
@@ -1716,6 +2113,7 @@
       return true;
     });
 
+    const seen = new Set((channel.messages || []).map((item) => Number(item.id || 0)));
     const merged = Array.isArray(channel.messages) ? channel.messages.slice() : [];
     for (const item of incomingMessages) {
       const messageId = Number(item.id || 0);
@@ -1729,6 +2127,56 @@
     channel.messages = merged;
   };
 
+  const mergeChannelEvents = (channel, incomingEvents) => {
+    if (!Array.isArray(incomingEvents) || incomingEvents.length === 0) {
+      return;
+    }
+    const seen = new Set((channel.events || []).map((item) => String(item.id || "")));
+    const merged = Array.isArray(channel.events) ? channel.events.slice() : [];
+    for (const item of incomingEvents) {
+      const eventId = String(item.id || "");
+      if (eventId === "" || seen.has(eventId)) {
+        continue;
+      }
+      seen.add(eventId);
+      merged.push(item);
+    }
+    channel.events = merged;
+  };
+
+  const reconcileConfirmedMessage = (channel, optimisticMessage, confirmedMessage) => {
+    if (!channel || !confirmedMessage || Number(confirmedMessage.id || 0) <= 0) {
+      return false;
+    }
+
+    const optimisticId = Number(optimisticMessage?.id || 0);
+    const optimisticContent = String(optimisticMessage?.content || "").trim();
+    const nextMessages = (channel.messages || []).filter((message) => {
+      const messageId = Number(message.id || 0);
+      if (optimisticId !== 0 && messageId === optimisticId) {
+        return false;
+      }
+
+      if (message.is_optimistic !== true) {
+        return true;
+      }
+
+      return String(message.content || "").trim() !== optimisticContent;
+    });
+
+    const confirmedId = Number(confirmedMessage.id || 0);
+    if (!nextMessages.some((message) => Number(message.id || 0) === confirmedId)) {
+      nextMessages.push(confirmedMessage);
+    }
+
+    nextMessages.sort((left, right) => Number(left.id || 0) - Number(right.id || 0));
+    channel.messages = nextMessages;
+    channel.last_message_id = Math.max(Number(channel.last_message_id || 0), confirmedId);
+    channel.messages_loaded = true;
+    channel.history_failed = false;
+    return true;
+  };
+
   const loadChannelHistory = async (channel) => {
     if (!channel || channel.messages_loaded === true || channel.history_loading === true) {
       return;
@@ -1739,9 +2187,13 @@
       try {
         const data = await fetchJson(`${pluginBase}/Widget/History?rooms_id=${channel.rooms_id}&limit=50`, { credentials: "same-origin" });
         channel.messages = Array.isArray(data.messages) ? data.messages : [];
+        channel.events = Array.isArray(data.events) ? data.events : [];
         channel.last_message_id = channel.messages.length > 0
-          ? Number(channel.messages[channel.messages.length - 1].id || channel.last_message_id || 0)
+          ? Number(channel.messages.at(-1).id || channel.last_message_id || 0)
           : Number(channel.last_message_id || 0);
+        channel.last_event_id = channel.events.length > 0
+          ? pickLatestEventCursor(channel.last_event_id, channel.events.at(-1).id)
+          : normalizeEventCursor(channel.last_event_id);
         channel.renderedMessageIds = new Set(channel.messages.map((m) => Number(m.id || 0)));
         channel.messages_loaded = true;
         channel.history_failed = false;
@@ -1755,9 +2207,13 @@
       fd.set("channels[0][tickets_id]", String(channel.tickets_id));
       fd.set("channels[0][room_type]", String(channel.room_type));
       fd.set("channels[0][after_id]", "0");
-      fd.set("channels[0][after_event_id]", String(channel.last_event_id || 0));
+      fd.set("channels[0][after_event_id]", normalizeEventCursor(channel.last_event_id));
       const pollData = await postForm(`${pluginBase}/Widget/Poll`, fd);
       const key = channelKey(channel.tickets_id, channel.room_type);
+      if (!/^\d+:(public|internal)$/.test(key)) {
+        channel.history_failed = true;
+        return;
+      }
       const patch = pollData.channels && pollData.channels[key] ? pollData.channels[key] : null;
       if (!patch || !Array.isArray(patch.messages)) {
         channel.history_failed = true;
@@ -1765,12 +2221,14 @@
       }
 
       channel.messages = patch.messages;
+      channel.events = Array.isArray(patch.events) ? patch.events : [];
       channel.last_message_id = Number(
         patch.last_message_id
-        || (patch.messages.length > 0 ? patch.messages[patch.messages.length - 1].id : channel.last_message_id || 0)
+        || (patch.messages.length > 0 ? patch.messages.at(-1).id : channel.last_message_id || 0)
       );
-      channel.last_event_id = Number(patch.last_event_id || channel.last_event_id || 0);
+      channel.last_event_id = pickLatestEventCursor(channel.last_event_id, patch.last_event_id);
       applyChannelUnread(channel, patch);
+      updateTicketStatus(channel.tickets_id, patch.ticket_status || 0);
       channel.renderedMessageIds = new Set(channel.messages.map((m) => Number(m.id || 0)));
       channel.messages_loaded = true;
       channel.history_failed = false;
@@ -1819,12 +2277,15 @@
       if (!openTickets.has(Number(channel.tickets_id || 0))) {
         continue;
       }
-      const hasLoadedHistory = channel.messages_loaded === true;
+      if (channel.messages_loaded !== true) {
+        continue;
+      }
       payload.push({
         tickets_id: channel.tickets_id,
         room_type: channel.room_type,
-        after_id: hasLoadedHistory ? (channel.last_message_id || 0) : 0,
-        after_event_id: channel.last_event_id || 0,
+        after_id: channel.last_message_id || 0,
+        after_event_id: normalizeEventCursor(channel.last_event_id),
+        is_typing: Boolean(channel.isTyping || false),
       });
     }
     if (payload.length === 0) {
@@ -1839,51 +2300,101 @@
       fd.set(`channels[${index}][room_type]`, item.room_type);
       fd.set(`channels[${index}][after_id]`, String(item.after_id));
       fd.set(`channels[${index}][after_event_id]`, String(item.after_event_id));
+      fd.set(`channels[${index}][is_typing]`, item.is_typing ? "1" : "0");
     });
 
     const data = await postForm(`${pluginBase}/Widget/Poll`, fd);
     let hasDockChanges = false;
-    const changedTicketIds = new Set();
+    const ticketsNeedingTabRefresh = new Set();
+    const ticketsNeedingMessageRefresh = new Set();
+    const ticketsNeedingTypingRefresh = new Set();
+    const channelsNeedingReload = [];
 
     for (const key of Object.keys(data.channels || {})) {
+      if (!/^\d+:(public|internal)$/.test(key)) {
+        continue;
+      }
       const patch = data.channels[key];
       const channel = state.channels.get(key);
       if (!channel) {
         continue;
       }
 
-      let channelChanged = false;
+      const serverLastMessageId = Number(patch.last_message_id || 0);
+      const localLastMessageId = Number(channel.last_message_id || 0);
+      const hasIncomingMessages = Array.isArray(patch.messages) && patch.messages.length > 0;
 
-      if (Array.isArray(patch.messages) && patch.messages.length > 0) {
+      if (hasIncomingMessages) {
         mergeChannelMessages(channel, patch.messages);
-        channel.last_message_id = Number(patch.last_message_id || channel.last_message_id || 0);
+        channel.last_message_id = serverLastMessageId;
         channel.messages_loaded = true;
         channel.history_failed = false;
-        channelChanged = true;
+        ticketsNeedingMessageRefresh.add(Number(channel.tickets_id || 0));
+        ticketsNeedingTabRefresh.add(Number(channel.tickets_id || 0));
         hasDockChanges = true;
+      } else if (serverLastMessageId > 0 && serverLastMessageId !== localLastMessageId) {
+        channel.last_message_id = serverLastMessageId;
+        channel.messages_loaded = false;
+        channel.history_failed = false;
+        channelsNeedingReload.push(channel);
+        ticketsNeedingMessageRefresh.add(Number(channel.tickets_id || 0));
+      }
+
+      if (Object.prototype.hasOwnProperty.call(patch, "ticket_status")) {
+        if (updateTicketStatus(channel.tickets_id, patch.ticket_status || 0)) {
+          ticketsNeedingMessageRefresh.add(Number(channel.tickets_id || 0));
+          ticketsNeedingTabRefresh.add(Number(channel.tickets_id || 0));
+        }
       }
 
       if (applyChannelUnread(channel, patch)) {
-        channelChanged = true;
+        ticketsNeedingTabRefresh.add(Number(channel.tickets_id || 0));
         hasDockChanges = true;
       }
 
       if (Array.isArray(patch.events) && patch.events.length > 0) {
-        channel.events.push(...patch.events);
-        channel.last_event_id = Number(patch.last_event_id || channel.last_event_id || 0);
-        channelChanged = true;
+        mergeChannelEvents(channel, patch.events);
+        channel.last_event_id = pickLatestEventCursor(channel.last_event_id, patch.last_event_id);
+        ticketsNeedingMessageRefresh.add(Number(channel.tickets_id || 0));
+        ticketsNeedingTabRefresh.add(Number(channel.tickets_id || 0));
         hasDockChanges = true;
       }
 
-      if (channelChanged) {
-        changedTicketIds.add(Number(channel.tickets_id || 0));
+      if (Object.prototype.hasOwnProperty.call(patch, "typing_names")) {
+        const prevTyping = channel.typing_names || [];
+        const nextTyping = patch.typing_names || [];
+        if (JSON.stringify(prevTyping) !== JSON.stringify(nextTyping)) {
+          channel.typing_names = nextTyping;
+          ticketsNeedingTypingRefresh.add(Number(channel.tickets_id || 0));
+        }
       }
     }
 
     for (const ticketId of state.openTicketIds) {
-      if (changedTicketIds.has(ticketId)) {
+      if (ticketsNeedingTabRefresh.has(ticketId)) {
         renderTicketTabs(ticketId);
+      }
+      if (ticketsNeedingMessageRefresh.has(ticketId)) {
         renderTicketMessages(ticketId);
+      } else if (ticketsNeedingTypingRefresh.has(ticketId)) {
+        renderTypingIndicator(ticketId);
+      }
+    }
+
+    for (const channel of channelsNeedingReload) {
+      await loadChannelHistory(channel);
+      ticketsNeedingMessageRefresh.add(Number(channel.tickets_id || 0));
+      ticketsNeedingTabRefresh.add(Number(channel.tickets_id || 0));
+    }
+
+    for (const ticketId of state.openTicketIds) {
+      if (ticketsNeedingTabRefresh.has(ticketId)) {
+        renderTicketTabs(ticketId);
+      }
+      if (ticketsNeedingMessageRefresh.has(ticketId)) {
+        renderTicketMessages(ticketId);
+      } else if (ticketsNeedingTypingRefresh.has(ticketId)) {
+        renderTypingIndicator(ticketId);
       }
     }
 
@@ -1913,214 +2424,10 @@
     }, META_SYNC_MS);
   };
 
-  const bootstrapGuest = async (guestRoot) => {
-    let lastMessageId = 0;
-    let lastEventId = 0;
-    let initialSyncDone = false;
-    const messages = guestRoot.querySelector("[data-role='messages']");
-    const form = guestRoot.querySelector("[data-role='guest-send-form']");
 
-    const addMessage = (message, skipAnimation = false) => {
-      // Determine if message is from the guest
-      const own = message.actor_type === "guest";
-      const item = document.createElement("div");
-      const isNew = !skipAnimation && !message.is_optimistic;
-      item.className = `glpichat-message ${own ? "is-own" : "is-other"}${isNew ? " is-new" : ""}${message.is_optimistic ? " is-optimistic" : ""}`;
-      
-      let bodyHtml = "";
-      if (Number(message.documents_id || 0) > 0) {
-        const contentStr = String(message.content || "");
-        const filename = contentStr.includes(":") 
-          ? contentStr.split(":").slice(1).join(":").trim() 
-          : contentStr;
-        
-        const isImg = /\.(apng|avif|gif|jpg|jpeg|jfif|pjpeg|pjpg|png|svg|webp)$/i.test(filename);
-        if (isImg) {
-          bodyHtml = `
-            <div class="glpichat-attachment-title">${sanitize(contentStr)}</div>
-            <div class="glpichat-attachment-preview">
-              <img src="/front/document.send.php?docid=${message.documents_id}" alt="${sanitize(filename)}" class="glpichat-zoomable-img" />
-            </div>
-          `;
-        } else {
-          bodyHtml = `
-            <a class="glpichat-attachment-link" href="/front/document.send.php?docid=${message.documents_id}" target="_blank" download="${sanitize(filename)}">
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;margin-right:4px;"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
-              ${sanitize(filename)}
-            </a>
-          `;
-        }
-      } else {
-        bodyHtml = sanitize(message.content);
-      }
-
-      item.innerHTML = `
-        <div class="glpichat-message-head">${sanitize(message.sender_name || (own ? "Você" : "Suporte"))}</div>
-        <div class="glpichat-message-body">${bodyHtml}</div>
-        <div class="glpichat-message-time">${sanitize(message.date_creation || "")}</div>
-      `;
-      messages.appendChild(item);
-    };
-
-    const syncGuest = async () => {
-      const params = new URLSearchParams({
-        last_message_id: String(lastMessageId),
-        last_event_id: String(lastEventId),
-      });
-      const data = await fetchJson(`${pluginBase}/Guest/Sync?${params.toString()}`);
-      
-      // Clean up temporary messages if we are syncing new ones
-      if (Array.isArray(data.messages) && data.messages.length > 0) {
-        const tempItems = messages.querySelectorAll(".glpichat-message.is-optimistic");
-        tempItems.forEach((el) => el.remove());
-      }
-      
-      for (const message of data.messages || []) {
-        addMessage(message, !initialSyncDone);
-        lastMessageId = Math.max(lastMessageId, Number(message.id || 0));
-      }
-      for (const event of data.events || []) {
-        lastEventId = Math.max(lastEventId, Number(event.id || 0));
-      }
-      messages.scrollTop = messages.scrollHeight;
-      initialSyncDone = true;
-    };
-
-    // Add Lightbox to guest view
-    const lightbox = document.createElement("div");
-    lightbox.className = "glpichat-lightbox";
-    lightbox.innerHTML = `
-      <button type="button" class="glpichat-lightbox-close">×</button>
-      <img class="glpichat-lightbox-img" src="" alt="Preview">
-    `;
-    guestRoot.appendChild(lightbox);
-    const lightboxImg = lightbox.querySelector(".glpichat-lightbox-img");
-    const closeBtn = lightbox.querySelector(".glpichat-lightbox-close");
-    
-    const closeLightbox = () => {
-      lightbox.classList.remove("is-open");
-    };
-    closeBtn.addEventListener("click", closeLightbox);
-    lightbox.addEventListener("click", (e) => {
-      if (e.target === lightbox) closeLightbox();
-    });
-
-    guestRoot.addEventListener("click", (event) => {
-      const zoomImg = event.target.closest(".glpichat-zoomable-img");
-      if (zoomImg) {
-        lightboxImg.src = zoomImg.src;
-        lightbox.classList.add("is-open");
-      }
-    });
-
-    if (form) {
-      const textarea = form.querySelector("textarea");
-      const fileInput = form.querySelector("input[type='file']");
-      const panel = guestRoot.querySelector(".glpichat-chatbox-panel");
-
-      if (textarea && fileInput) {
-        // Ctrl+V paste support for guest
-        textarea.addEventListener("paste", (e) => {
-          if (e.clipboardData && e.clipboardData.files && e.clipboardData.files.length > 0) {
-            fileInput.files = e.clipboardData.files;
-            submitForm(form);
-            e.preventDefault();
-          }
-        });
-
-        // Enter to send, Shift+Enter for newline
-        textarea.addEventListener("keydown", (e) => {
-          if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            submitForm(form);
-          }
-        });
-      }
-
-      if (panel && fileInput) {
-        panel.addEventListener("dragover", (e) => {
-          e.preventDefault();
-          panel.classList.add("drag-over");
-        });
-
-        panel.addEventListener("dragleave", (e) => {
-          if (e.relatedTarget && panel.contains(e.relatedTarget)) {
-            return;
-          }
-          panel.classList.remove("drag-over");
-        });
-
-        panel.addEventListener("drop", (e) => {
-          e.preventDefault();
-          panel.classList.remove("drag-over");
-          if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-            fileInput.files = e.dataTransfer.files;
-            submitForm(form);
-          }
-        });
-      }
-
-      form.addEventListener("submit", async (event) => {
-        event.preventDefault();
-        const fd = new FormData(form);
-        const content = String(fd.get("content") || "").trim();
-        const file = fd.get("file");
-        
-        const hasFile = file instanceof File && file.size > 0;
-        if (content === "" && !hasFile) {
-          return;
-        }
-
-        // Guest optimistic render placeholder
-        const tempItem = document.createElement("div");
-        tempItem.className = "glpichat-message is-own is-optimistic";
-        const displayContent = hasFile ? `Enviando arquivo: ${file.name}...` : content;
-        tempItem.innerHTML = `
-          <div class="glpichat-message-head">Você</div>
-          <div class="glpichat-message-body">${sanitize(displayContent)}</div>
-          <div class="glpichat-message-time">Enviando...</div>
-        `;
-        messages.appendChild(tempItem);
-        messages.scrollTop = messages.scrollHeight;
-
-        if (textarea) textarea.value = "";
-        if (fileInput) fileInput.value = "";
-
-        try {
-          if (content !== "") {
-            await postForm(`${pluginBase}/Guest/Send`, fd);
-          }
-          if (hasFile) {
-            await postForm(`${pluginBase}/Guest/Upload`, fd);
-          }
-        } catch (err) {
-          tempItem.remove();
-          if (textarea && content !== "") textarea.value = content;
-          alert("Erro ao enviar: " + err.message);
-        }
-
-        setTimeout(() => {
-          tempItem.remove();
-        }, 5000);
-
-        await syncGuest();
-      });
-    }
-
-    await syncGuest();
-    window.setInterval(() => {
-      if (document.visibilityState === "visible") {
-        syncGuest().catch(console.error);
-      }
-    }, 5000);
-  };
 
   const bootstrap = async () => {
-    const guestRoot = document.querySelector(".glpichat[data-guest='1']");
-    if (guestRoot) {
-      await bootstrapGuest(guestRoot);
-      return;
-    }
+
 
     if (!document.body || window.location.pathname.includes("/install/")) {
       return;
@@ -2131,7 +2438,7 @@
     window.setInterval(updateObstructionElementsCache, 8000);
 
     state.activeTicketId = activeTicketIdFromPage();
-    loadUiState();
+    loadUiState(state);
     createShell();
 
     const endpoint = `${pluginBase}/Widget/Channels${state.activeTicketId > 0 ? `?tickets_id=${state.activeTicketId}` : ""}`;
@@ -2213,7 +2520,8 @@
     if (!ticket) {
       return;
     }
-    const activeKey = ticket.channels[ticket.activeTab];
+    const activeTab = isValidRoomType(ticket.activeTab) ? ticket.activeTab : "public";
+    const activeKey = ticket.channels[activeTab];
     if (!activeKey) {
       return;
     }
@@ -2235,4 +2543,3 @@
   window.glpiChatMountInviteManagement = (container) => {
     mountInviteManagement(container).catch(console.error);
   };
-})();

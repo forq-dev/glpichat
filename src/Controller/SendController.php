@@ -13,15 +13,16 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 
-use function glpichat_add_followup;
-use function glpichat_add_message;
 use function glpichat_assert_can_send;
 use function glpichat_current_user_id;
+use function glpichat_message_by_id;
+use function glpichat_send_message_use_case;
 use function glpichat_participant_id_for_user;
 use function glpichat_require_logged_csrf;
 use function glpichat_room_id;
 
 require_once dirname(__DIR__) . '/functions.php';
+require_once dirname(__DIR__) . '/flows/message_flow.php';
 
 final class SendController extends AbstractController
 {
@@ -35,24 +36,25 @@ final class SendController extends AbstractController
 
             $tickets_id = $request->request->getInt('tickets_id');
             $room_type = $request->request->getString('room_type');
-            $content = trim($request->request->getString('content'));
-
-            if ($tickets_id <= 0 || $content === '' || !in_array($room_type, ['public', 'internal'], true)) {
-                throw new RuntimeException('Invalid message parameters.');
-            }
-
-            glpichat_assert_can_send($tickets_id, $room_type);
-            $users_id = glpichat_current_user_id();
-            $rooms_id = glpichat_room_id($tickets_id, $room_type);
-            $participants_id = glpichat_participant_id_for_user($rooms_id, $users_id);
-            $followups_id = glpichat_add_followup($tickets_id, $users_id, $content, $room_type === 'internal');
-            $message_id = glpichat_add_message($tickets_id, $room_type, 'user', $users_id, $participants_id, $content, 0, $followups_id);
+            $content = $request->request->getString('content');
+            $message_id = glpichat_send_message_use_case(
+                $tickets_id,
+                $room_type,
+                $content,
+                'glpichat_assert_can_send',
+                'glpichat_current_user_id',
+                'glpichat_room_id',
+                'glpichat_participant_id_for_user',
+                'glpichat_add_followup',
+                'glpichat_add_message'
+            );
 
             return new JsonResponse([
                 'message_id' => $message_id,
+                'message' => glpichat_message_by_id($message_id),
                 '_glpi_csrf_token' => \Session::getNewCSRFToken(),
             ]);
-        } catch (RuntimeException $e) {
+        } catch (\Throwable $e) {
             return new JsonResponse(['error' => $e->getMessage()], 400);
         }
     }

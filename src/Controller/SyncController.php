@@ -29,7 +29,7 @@ final class SyncController extends AbstractController
         $tickets_id = $request->query->getInt('tickets_id');
         $room_type = $request->query->getString('room_type');
         $last_message_id = $request->query->getInt('last_message_id');
-        $last_event_id = $request->query->getInt('last_event_id');
+        $last_event_id = $request->query->getString('last_event_id');
 
         if ($tickets_id <= 0 || !in_array($room_type, ['public', 'internal'], true)) {
             throw new RuntimeException('Invalid sync parameters.');

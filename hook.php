@@ -19,12 +19,24 @@ function plugin_glpichat_install(): bool
     }
 
     glpichat_add_indexes($migration);
+
+    if ($DB->tableExists('glpi_plugin_glpichat_participants') && !$DB->fieldExists('glpi_plugin_glpichat_participants', 'last_activity')) {
+        $migration->addField('glpi_plugin_glpichat_participants', 'last_activity', 'TIMESTAMP NULL DEFAULT NULL');
+    }
+    if ($DB->tableExists('glpi_plugin_glpichat_participants') && !$DB->fieldExists('glpi_plugin_glpichat_participants', 'last_seen')) {
+        $migration->addField('glpi_plugin_glpichat_participants', 'last_seen', 'TIMESTAMP NULL DEFAULT NULL');
+    }
+    if ($DB->tableExists('glpi_plugin_glpichat_participants') && !$DB->fieldExists('glpi_plugin_glpichat_participants', 'is_typing_until')) {
+        $migration->addField('glpi_plugin_glpichat_participants', 'is_typing_until', 'TIMESTAMP NULL DEFAULT NULL');
+    }
+
     $migration->addCrontask(\GlpiPlugin\Glpichat\EventCleanupCron::class, 'CleanEvents', DAY_TIMESTAMP);
 
     glpichat_add_profile_rights();
     Config::setConfigurationValues('plugin:glpichat', [
         'external_followup_user_id' => (string) Config::getConfigurationValue('plugin:glpichat', 'external_followup_user_id') ?: '0',
         'default_notifications_bootstrapped' => '1',
+        'rights_model_version' => GLPICHAT_RIGHTS_MODEL_VERSION,
     ]);
 
     // Register RequestType "GLPI Chat" if it doesn't exist
@@ -56,8 +68,8 @@ function plugin_glpichat_uninstall(): bool
         }
     }
 
-    ProfileRight::deleteProfileRights(glpichat_right_names());
-    Config::deleteConfigurationValues('plugin:glpichat', ['external_followup_user_id', 'default_notifications_bootstrapped']);
+    ProfileRight::deleteProfileRights(array_merge(glpichat_right_names(), glpichat_legacy_right_names()));
+    Config::deleteConfigurationValues('plugin:glpichat', ['external_followup_user_id', 'default_notifications_bootstrapped', 'rights_model_version']);
     $DB->delete('glpi_crontasks', [
         'itemtype' => \GlpiPlugin\Glpichat\EventCleanupCron::class,
         'name' => 'CleanEvents',

@@ -13,16 +13,17 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 
-use function glpichat_add_followup;
-use function glpichat_add_message;
 use function glpichat_assert_can_send;
 use function glpichat_current_user_id;
+use function glpichat_message_by_id;
+use function glpichat_upload_message_use_case;
 use function glpichat_participant_id_for_user;
 use function glpichat_require_logged_csrf;
 use function glpichat_room_id;
 use function glpichat_upload_document;
 
 require_once dirname(__DIR__) . '/functions.php';
+require_once dirname(__DIR__) . '/flows/message_flow.php';
 
 final class UploadController extends AbstractController
 {
@@ -38,25 +39,27 @@ final class UploadController extends AbstractController
             $room_type = $request->request->getString('room_type');
             $file = $request->files->get('file');
 
-            if ($tickets_id <= 0 || !$file || !in_array($room_type, ['public', 'internal'], true)) {
-                throw new RuntimeException('Invalid upload parameters.');
-            }
-
-            glpichat_assert_can_send($tickets_id, $room_type);
-            $users_id = glpichat_current_user_id();
-            $documents_id = glpichat_upload_document($tickets_id, $file, true);
-            $content = 'Attachment added from GLPI Chat: ' . $file->getClientOriginalName();
-            $followups_id = glpichat_add_followup($tickets_id, $users_id, $content, false);
-            $rooms_id = glpichat_room_id($tickets_id, $room_type);
-            $participants_id = glpichat_participant_id_for_user($rooms_id, $users_id);
-            $message_id = glpichat_add_message($tickets_id, $room_type, 'user', $users_id, $participants_id, $content, $documents_id, $followups_id);
+            $result = glpichat_upload_message_use_case(
+                $tickets_id,
+                $room_type,
+                $file,
+                'GLPI Chat',
+                'glpichat_assert_can_send',
+                'glpichat_current_user_id',
+                'glpichat_upload_document',
+                'glpichat_add_followup',
+                'glpichat_room_id',
+                'glpichat_participant_id_for_user',
+                'glpichat_add_message'
+            );
 
             return new JsonResponse([
-                'message_id' => $message_id,
-                'documents_id' => $documents_id,
+                'message_id' => $result['message_id'],
+                'documents_id' => $result['documents_id'],
+                'message' => glpichat_message_by_id($result['message_id']),
                 '_glpi_csrf_token' => \Session::getNewCSRFToken(),
             ]);
-        } catch (RuntimeException $e) {
+        } catch (\Throwable $e) {
             return new JsonResponse(['error' => $e->getMessage()], 400);
         }
     }

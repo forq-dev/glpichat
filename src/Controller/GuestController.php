@@ -15,17 +15,21 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 
 use function glpichat_accept_invite;
-use function glpichat_add_followup;
-use function glpichat_add_message;
+use function glpichat_accept_invite_use_case;
 use function glpichat_events;
-use function glpichat_external_followup_user_id;
+use function glpichat_guest_leave_use_case;
+use function glpichat_guest_send_message_use_case;
 use function glpichat_guest_participant;
+use function glpichat_guest_sync_use_case;
+use function glpichat_guest_upload_message_use_case;
 use function glpichat_messages;
-use function glpichat_upload_document;
+use function glpichat_room_by_id;
+use function glpichat_ticket_status;
 
 use const GLPICHAT_GUEST_COOKIE;
 
 require_once dirname(__DIR__) . '/functions.php';
+require_once dirname(__DIR__) . '/flows/guest_flow.php';
 
 final class GuestController extends AbstractController
 {
@@ -34,7 +38,17 @@ final class GuestController extends AbstractController
     public function accept(Request $request, string $token): Response
     {
         try {
-            $accepted = glpichat_accept_invite($token);
+            $accepted = glpichat_accept_invite_use_case(
+                $token,
+                static fn(string $token_hash): array => glpichat_accept_invite_lookup($token_hash),
+                static fn(): string => bin2hex(random_bytes(32)),
+                'glpichat_create_guest_participant',
+                'glpichat_mark_invite_accepted',
+                'glpichat_record_event',
+                'glpichat_external_followup_user_id',
+                'glpichat_add_followup',
+                'glpichat_raise_guest_joined_notification_event'
+            );
             $response = new Response($this->guestHtml((int) $accepted['tickets_id'], (int) $accepted['rooms_id'], (string) $accepted['guest_name']));
             $response->headers->setCookie(
                 Cookie::create(GLPICHAT_GUEST_COOKIE, $accepted['session_token'])
@@ -53,16 +67,48 @@ final class GuestController extends AbstractController
     public function sync(Request $request): Response
     {
         try {
-            $participant = glpichat_guest_participant($request->cookies->get(GLPICHAT_GUEST_COOKIE, ''));
-            $rooms_id = (int) $participant['rooms_id'];
+            $is_typing = $request->query->getBoolean('is_typing');
+            $result = glpichat_guest_sync_use_case(
+                $request->cookies->get(GLPICHAT_GUEST_COOKIE, ''),
+                $request->query->getInt('last_message_id'),
+                $request->query->getString('last_event_id'),
+                $is_typing,
+                'glpichat_guest_participant',
+                'glpichat_room_by_id',
+                'glpichat_messages',
+                'glpichat_events',
+                'glpichat_ticket_status',
+                'glpichat_update_participant_activity',
+                'glpichat_get_typing_participants'
+            );
 
-            return new JsonResponse([
-                'messages' => glpichat_messages($rooms_id, $request->query->getInt('last_message_id')),
-                'events' => glpichat_events($rooms_id, $request->query->getInt('last_event_id')),
-            ]);
-        } catch (RuntimeException $e) {
+            return new JsonResponse($result);
+        } catch (\Throwable $e) {
             return new JsonResponse(['error' => $e->getMessage()], 400);
         }
+    }
+
+    #[Route('/Guest/Leave', name: 'glpichat_guest_leave', methods: ['POST'])]
+    #[SecurityStrategy(Firewall::STRATEGY_NO_CHECK)]
+    public function leave(Request $request): Response
+    {
+        $session_token = $request->cookies->get(GLPICHAT_GUEST_COOKIE, '');
+        if ($session_token === '') {
+            return new Response('', 204);
+        }
+
+        try {
+            glpichat_guest_leave_use_case(
+                $session_token,
+                date('Y-m-d H:i:s'),
+                'glpichat_guest_participant',
+                'glpichat_disconnect_participant'
+            );
+        } catch (RuntimeException $error) {
+            return new Response('', 204);
+        }
+
+        return new Response('', 204);
     }
 
     #[Route('/Guest/Send', name: 'glpichat_guest_send', methods: ['POST'])]
@@ -70,22 +116,19 @@ final class GuestController extends AbstractController
     public function send(Request $request): Response
     {
         try {
-            $participant = glpichat_guest_participant($request->cookies->get(GLPICHAT_GUEST_COOKIE, ''));
-            $content = trim($request->request->getString('content'));
-            if ($content === '') {
-                throw new RuntimeException('Invalid message content.');
-            }
-
-            $followups_id = glpichat_add_followup(
-                (int) $this->ticketIdForGuest($participant),
-                glpichat_external_followup_user_id(),
-                $content,
-                false
+            $message_id = glpichat_guest_send_message_use_case(
+                $request->cookies->get(GLPICHAT_GUEST_COOKIE, ''),
+                $request->request->getString('content'),
+                'glpichat_guest_participant',
+                'glpichat_room_by_id',
+                'glpichat_assert_ticket_open_for_chat',
+                'glpichat_external_followup_user_id',
+                'glpichat_add_followup',
+                'glpichat_add_message'
             );
-            $message_id = glpichat_add_message((int) $this->ticketIdForGuest($participant), 'public', 'guest', 0, (int) $participant['id'], $content, 0, $followups_id);
 
             return new JsonResponse(['message_id' => $message_id]);
-        } catch (RuntimeException $e) {
+        } catch (\Throwable $e) {
             return new JsonResponse(['error' => $e->getMessage()], 400);
         }
     }
@@ -95,44 +138,22 @@ final class GuestController extends AbstractController
     public function upload(Request $request): Response
     {
         try {
-            $participant = glpichat_guest_participant($request->cookies->get(GLPICHAT_GUEST_COOKIE, ''));
-            $file = $request->files->get('file');
-            if (!$file) {
-                throw new RuntimeException('Invalid upload parameters.');
-            }
-
-            $tickets_id = (int) $this->ticketIdForGuest($participant);
-            $documents_id = glpichat_upload_document($tickets_id, $file, true);
-            $content = 'Attachment added from guest chat: ' . $file->getClientOriginalName();
-            $followups_id = glpichat_add_followup(
-                $tickets_id,
-                glpichat_external_followup_user_id(),
-                $content,
-                false
+            $result = glpichat_guest_upload_message_use_case(
+                $request->cookies->get(GLPICHAT_GUEST_COOKIE, ''),
+                $request->files->get('file'),
+                'glpichat_guest_participant',
+                'glpichat_room_by_id',
+                'glpichat_assert_ticket_open_for_chat',
+                'glpichat_upload_document',
+                'glpichat_external_followup_user_id',
+                'glpichat_add_followup',
+                'glpichat_add_message'
             );
-            $message_id = glpichat_add_message($tickets_id, 'public', 'guest', 0, (int) $participant['id'], $content, $documents_id, $followups_id);
 
-            return new JsonResponse(['message_id' => $message_id, 'documents_id' => $documents_id]);
-        } catch (RuntimeException $e) {
+            return new JsonResponse($result);
+        } catch (\Throwable $e) {
             return new JsonResponse(['error' => $e->getMessage()], 400);
         }
-    }
-
-    private function ticketIdForGuest(array $participant): int
-    {
-        global $DB;
-
-        $room = $DB->request([
-            'FROM' => 'glpi_plugin_glpichat_rooms',
-            'WHERE' => ['id' => (int) $participant['rooms_id']],
-            'LIMIT' => 1,
-        ])->current();
-
-        if (!is_array($room)) {
-            throw new RuntimeException('Guest room not found.');
-        }
-
-        return (int) $room['tickets_id'];
     }
 
     private function guestHtml(int $tickets_id, int $rooms_id, string $guest_name): string
@@ -143,7 +164,7 @@ final class GuestController extends AbstractController
 
         $plugin_dir = dirname(__DIR__, 2);
         $css_version = file_exists($plugin_dir . '/public/css/glpichat.css') ? filemtime($plugin_dir . '/public/css/glpichat.css') : time();
-        $js_version = file_exists($plugin_dir . '/public/js/glpichat.js') ? filemtime($plugin_dir . '/public/js/glpichat.js') : time();
+        $js_version = file_exists($plugin_dir . '/public/js/glpichat-guest.js') ? filemtime($plugin_dir . '/public/js/glpichat-guest.js') : time();
 
         return '<!doctype html><html><head><meta charset="utf-8"><title>GLPI Chat</title>'
             . '<link rel="stylesheet" href="' . $url_path . '/plugins/glpichat/public/css/glpichat.css?v=' . $css_version . '">'
@@ -162,6 +183,7 @@ final class GuestController extends AbstractController
             . '    <span class="glpichat-guest-badge">' . htmlescape($guest_name) . '</span>'
             . '  </div>'
             . '  <div class="glpichat-messages" data-role="messages"></div>'
+            . '  <div class="glpichat-typing-indicator" data-role="typing-indicator" hidden></div>'
             . '  <form class="glpichat-send" data-role="guest-send-form">'
             . '    <input id="guest-attach" class="glpichat-file-input" type="file" name="file">'
             . '    <label for="guest-attach" class="glpichat-attach" title="Anexar arquivo">'
@@ -173,6 +195,6 @@ final class GuestController extends AbstractController
             . '    </button>'
             . '  </form>'
             . '</div>'
-            . '</main><script src="' . $url_path . '/plugins/glpichat/public/js/glpichat.js?v=' . $js_version . '"></script></body></html>';
+            . '</main><script src="' . $url_path . '/plugins/glpichat/public/js/glpichat-guest.js?v=' . $js_version . '"></script></body></html>';
     }
 }

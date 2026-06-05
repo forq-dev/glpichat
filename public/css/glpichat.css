@@ -145,60 +145,58 @@
   right: auto;
   left: -5px;
 }
-
 /* Launcher tab button: left positions flip position */
 .glpichat-widget.pos-bottom-left .glpichat-launcher.is-open .glpichat-chatbox-tab,
 .glpichat-widget.pos-top-left .glpichat-launcher.is-open .glpichat-chatbox-tab {
   right: auto;
   left: 0;
 }
-
 /* --- Bottom-Right Animations --- */
 .glpichat-widget.pos-bottom-right .glpichat-chatbox-panel {
   transform-origin: bottom right;
 }
-.glpichat-widget.pos-bottom-right .glpichat-chatbox.is-open .glpichat-chatbox-panel,
-.glpichat-widget.pos-bottom-right .glpichat-launcher.is-open .glpichat-chatbox-panel {
-  animation: glpichat-enter-br 220ms cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+.glpichat-widget.pos-bottom-right .glpichat-chatbox.is-open .glpichat-chatbox-panel:not(.is-closing),
+.glpichat-widget.pos-bottom-right .glpichat-launcher.is-open .glpichat-chatbox-panel:not(.is-closing) {
+  animation: glpichat-enter-br 400ms cubic-bezier(0.34, 1.56, 0.64, 1) !important;
 }
 .glpichat-widget.pos-bottom-right .glpichat-chatbox-panel.is-closing {
-  animation: glpichat-exit-br 200ms cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+  animation: glpichat-exit-br 200ms cubic-bezier(0.4, 0, 0.2, 1) forwards !important;
 }
 
 /* --- Bottom-Left Animations --- */
 .glpichat-widget.pos-bottom-left .glpichat-chatbox-panel {
   transform-origin: bottom left;
 }
-.glpichat-widget.pos-bottom-left .glpichat-chatbox.is-open .glpichat-chatbox-panel,
-.glpichat-widget.pos-bottom-left .glpichat-launcher.is-open .glpichat-chatbox-panel {
-  animation: glpichat-enter-bl 220ms cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+.glpichat-widget.pos-bottom-left .glpichat-chatbox.is-open .glpichat-chatbox-panel:not(.is-closing),
+.glpichat-widget.pos-bottom-left .glpichat-launcher.is-open .glpichat-chatbox-panel:not(.is-closing) {
+  animation: glpichat-enter-bl 400ms cubic-bezier(0.34, 1.56, 0.64, 1) !important;
 }
 .glpichat-widget.pos-bottom-left .glpichat-chatbox-panel.is-closing {
-  animation: glpichat-exit-bl 200ms cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+  animation: glpichat-exit-bl 200ms cubic-bezier(0.4, 0, 0.2, 1) forwards !important;
 }
 
 /* --- Top-Right Animations --- */
 .glpichat-widget.pos-top-right .glpichat-chatbox-panel {
   transform-origin: top right;
 }
-.glpichat-widget.pos-top-right .glpichat-chatbox.is-open .glpichat-chatbox-panel,
-.glpichat-widget.pos-top-right .glpichat-launcher.is-open .glpichat-chatbox-panel {
-  animation: glpichat-enter-tr 220ms cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+.glpichat-widget.pos-top-right .glpichat-chatbox.is-open .glpichat-chatbox-panel:not(.is-closing),
+.glpichat-widget.pos-top-right .glpichat-launcher.is-open .glpichat-chatbox-panel:not(.is-closing) {
+  animation: glpichat-enter-tr 400ms cubic-bezier(0.34, 1.56, 0.64, 1) !important;
 }
 .glpichat-widget.pos-top-right .glpichat-chatbox-panel.is-closing {
-  animation: glpichat-exit-tr 200ms cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+  animation: glpichat-exit-tr 200ms cubic-bezier(0.4, 0, 0.2, 1) forwards !important;
 }
 
 /* --- Top-Left Animations --- */
 .glpichat-widget.pos-top-left .glpichat-chatbox-panel {
   transform-origin: top left;
 }
-.glpichat-widget.pos-top-left .glpichat-chatbox.is-open .glpichat-chatbox-panel,
-.glpichat-widget.pos-top-left .glpichat-launcher.is-open .glpichat-chatbox-panel {
-  animation: glpichat-enter-tl 220ms cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+.glpichat-widget.pos-top-left .glpichat-chatbox.is-open .glpichat-chatbox-panel:not(.is-closing),
+.glpichat-widget.pos-top-left .glpichat-launcher.is-open .glpichat-chatbox-panel:not(.is-closing) {
+  animation: glpichat-enter-tl 400ms cubic-bezier(0.34, 1.56, 0.64, 1) !important;
 }
 .glpichat-widget.pos-top-left .glpichat-chatbox-panel.is-closing {
-  animation: glpichat-exit-tl 200ms cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+  animation: glpichat-exit-tl 200ms cubic-bezier(0.4, 0, 0.2, 1) forwards !important;
 }
 
 /* Drag and Drop classes */
@@ -244,7 +242,8 @@
   width: 210px;
   max-width: 210px;
   z-index: 4;
-  transition: flex-basis 200ms cubic-bezier(0.4, 0, 0.2, 1), width 200ms cubic-bezier(0.4, 0, 0.2, 1), max-width 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition: flex-basis 200ms cubic-bezier(0.16, 1, 0.3, 1), width 200ms cubic-bezier(0.16, 1, 0.3, 1), max-width 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: flex-basis, width, max-width;
 }
 
 .glpichat-chatbox.glpichat-launcher {
@@ -252,7 +251,8 @@
   width: 62px;
   max-width: 62px;
   z-index: 8;
-  transition: flex-basis 200ms cubic-bezier(0.4, 0, 0.2, 1), width 200ms cubic-bezier(0.4, 0, 0.2, 1), max-width 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition: flex-basis 200ms cubic-bezier(0.16, 1, 0.3, 1), width 200ms cubic-bezier(0.16, 1, 0.3, 1), max-width 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: flex-basis, width, max-width;
 }
 
 .glpichat-chatbox-tab {
@@ -296,8 +296,9 @@
   box-shadow: var(--glpichat-shadow);
   overflow: hidden;
   display: grid;
-  grid-template-rows: auto auto auto 1fr auto;
-  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+  grid-template-rows: auto auto auto 1fr auto auto;
+  transition: box-shadow 180ms ease, border-color 180ms ease;
+  will-change: transform, opacity;
 }
 
 .glpichat-window-head {
@@ -316,8 +317,12 @@
   grid-row: 4;
 }
 
-.glpichat-send {
+.glpichat-typing-indicator {
   grid-row: 5;
+}
+
+.glpichat-send {
+  grid-row: 6;
 }
 
 .glpichat-chatbox.is-open .glpichat-chatbox-tab {
@@ -338,17 +343,17 @@
   max-width: min(96vw, 360px);
 }
 
-.glpichat-chatbox:not(.glpichat-launcher).is-open .glpichat-chatbox-panel {
+.glpichat-chatbox:not(.glpichat-launcher).is-open .glpichat-chatbox-panel:not(.is-closing) {
   position: absolute;
   right: 0;
   bottom: var(--glpichat-panel-bottom-offset);
   width: 360px;
   max-width: min(96vw, 360px);
   border-radius: 12px;
-  animation: glpichat-panel-enter 200ms ease-out;
+  animation: glpichat-panel-enter 400ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-.glpichat-launcher .glpichat-chatbox-panel {
+.glpichat-launcher .glpichat-chatbox-panel:not(.is-closing) {
   width: 420px;
   height: min(72vh, 620px);
   right: 0;
@@ -357,14 +362,14 @@
   z-index: 1;
 }
 
-.glpichat-launcher.is-open .glpichat-chatbox-panel {
+.glpichat-launcher.is-open .glpichat-chatbox-panel:not(.is-closing) {
   position: absolute;
   right: 0;
   bottom: var(--glpichat-panel-bottom-offset);
   width: 420px;
   max-width: min(96vw, 420px);
   border-radius: 12px;
-  animation: glpichat-panel-enter 200ms ease-out;
+  animation: glpichat-panel-enter 400ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .glpichat-launcher.is-open {
@@ -385,6 +390,12 @@
   flex-basis: 62px !important;
   width: 62px !important;
   max-width: 62px !important;
+}
+
+.glpichat-chatbox.is-closing,
+.glpichat-launcher.is-closing {
+  transition-duration: 200ms !important;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
 
 .glpichat-launcher .glpichat-chatbox-tab {
@@ -507,8 +518,9 @@
 }
 
 .glpichat-messages {
-  overflow: auto;
-  padding: 8px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px 8px 32px 8px;
   display: grid;
   gap: 7px;
   align-content: start;
@@ -549,6 +561,8 @@
 .glpichat-message-body {
   margin-top: 2px;
   white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
   font-size: 12px;
   color: var(--glpichat-text);
 }
@@ -1021,6 +1035,13 @@
   gap: 4px;
 }
 
+.glpichat-invite-statuses {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
 .glpichat-badge {
   font-size: 9px;
   font-weight: 700;
@@ -1047,6 +1068,36 @@
   background: color-mix(in srgb, #007bff 15%, var(--glpichat-surface));
   color: #0069d9;
   border: 1px solid color-mix(in srgb, #007bff 30%, transparent);
+}
+
+.glpichat-badge-neutral {
+  background: color-mix(in srgb, var(--glpichat-text) 8%, var(--glpichat-surface));
+  color: var(--glpichat-text);
+  border: 1px solid color-mix(in srgb, var(--glpichat-text) 18%, transparent);
+}
+
+.glpichat-badge-session-active {
+  background: color-mix(in srgb, #198754 14%, var(--glpichat-surface));
+  color: #157347;
+  border: 1px solid color-mix(in srgb, #198754 26%, transparent);
+}
+
+.glpichat-badge-session-timeout {
+  background: color-mix(in srgb, #fd7e14 14%, var(--glpichat-surface));
+  color: #c96a10;
+  border: 1px solid color-mix(in srgb, #fd7e14 26%, transparent);
+}
+
+.glpichat-badge-session-ended {
+  background: color-mix(in srgb, #6f42c1 14%, var(--glpichat-surface));
+  color: #5f37a8;
+  border: 1px solid color-mix(in srgb, #6f42c1 26%, transparent);
+}
+
+.glpichat-invite-status-note {
+  font-size: 9px;
+  color: var(--glpichat-muted);
+  text-align: right;
 }
 
 .glpichat-invite-access {
@@ -1246,7 +1297,8 @@
 @keyframes glpichat-enter-br {
   from {
     opacity: 0;
-    transform: scale(0.85) translate(15px, 15px);
+    transform: scale(0.90) translate(12px, 12px);
+    filter: blur(4px);
   }
   to {
     opacity: 1;
@@ -1257,17 +1309,19 @@
   from {
     opacity: 1;
     transform: scale(1) translate(0, 0);
+    filter: blur(0px);
   }
   to {
     opacity: 0;
-    transform: scale(0.85) translate(15px, 15px);
+    transform: scale(0.96) translate(8px, 8px);
   }
 }
 
 @keyframes glpichat-enter-bl {
   from {
     opacity: 0;
-    transform: scale(0.85) translate(-15px, 15px);
+    transform: scale(0.90) translate(-12px, 12px);
+    filter: blur(4px);
   }
   to {
     opacity: 1;
@@ -1278,17 +1332,19 @@
   from {
     opacity: 1;
     transform: scale(1) translate(0, 0);
+    filter: blur(0px);
   }
   to {
     opacity: 0;
-    transform: scale(0.85) translate(-15px, 15px);
+    transform: scale(0.96) translate(-8px, 8px);
   }
 }
 
 @keyframes glpichat-enter-tr {
   from {
     opacity: 0;
-    transform: scale(0.85) translate(15px, -15px);
+    transform: scale(0.90) translate(12px, -12px);
+    filter: blur(4px);
   }
   to {
     opacity: 1;
@@ -1299,17 +1355,19 @@
   from {
     opacity: 1;
     transform: scale(1) translate(0, 0);
+    filter: blur(0px);
   }
   to {
     opacity: 0;
-    transform: scale(0.85) translate(15px, -15px);
+    transform: scale(0.96) translate(8px, -8px);
   }
 }
 
 @keyframes glpichat-enter-tl {
   from {
     opacity: 0;
-    transform: scale(0.85) translate(-15px, -15px);
+    transform: scale(0.90) translate(-12px, -12px);
+    filter: blur(4px);
   }
   to {
     opacity: 1;
@@ -1320,10 +1378,11 @@
   from {
     opacity: 1;
     transform: scale(1) translate(0, 0);
+    filter: blur(0px);
   }
   to {
     opacity: 0;
-    transform: scale(0.85) translate(-15px, -15px);
+    transform: scale(0.96) translate(-8px, -8px);
   }
 }
 
@@ -1345,9 +1404,9 @@
   box-shadow: 0 8px 16px color-mix(in srgb, var(--tblr-body-color) 18%, transparent);
 }
 
-.glpichat-chatbox.is-open .glpichat-chatbox-panel,
-.glpichat-launcher.is-open .glpichat-chatbox-panel {
-  animation: glpichat-panel-enter 200ms ease-out;
+.glpichat-chatbox.is-open .glpichat-chatbox-panel:not(.is-closing),
+.glpichat-launcher.is-open .glpichat-chatbox-panel:not(.is-closing) {
+  animation: glpichat-panel-enter 400ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 /* --- Scrollbars Personalizadas --- */
@@ -1496,17 +1555,30 @@
 
 /* --- Animação de Fechamento (Closing State) --- */
 .glpichat-chatbox-panel.is-closing {
-  animation: glpichat-panel-exit 200ms cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+  animation: glpichat-panel-exit 200ms cubic-bezier(0.4, 0, 0.2, 1) forwards !important;
+}
+
+@keyframes glpichat-panel-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.90) translateY(16px);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 
 @keyframes glpichat-panel-exit {
   from {
     opacity: 1;
-    transform: scale(1);
+    transform: scale(1) translateY(0);
+    filter: blur(0px);
   }
   to {
     opacity: 0;
-    transform: scale(0.95);
+    transform: scale(0.96) translateY(8px);
   }
 }
 
@@ -1718,7 +1790,7 @@ body.glpichat-guest-page {
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
   background: var(--glpichat-surface);
   border: 1px solid var(--glpichat-line);
-  grid-template-rows: auto 1fr auto; /* Head, Messages, Send */
+  grid-template-rows: auto 1fr auto auto; /* Head, Messages, Typing, Send */
   display: grid;
   overflow: hidden;
 }
@@ -1740,12 +1812,12 @@ body.glpichat-guest-page {
 
 .glpichat-guest-page .glpichat-messages {
   grid-row: 2;
-  padding: 20px;
+  padding: 20px 20px 44px 20px;
   background: var(--glpichat-surface-soft);
 }
 
 .glpichat-guest-page .glpichat-send {
-  grid-row: 3;
+  grid-row: 4;
   padding: 12px 20px;
   background: var(--glpichat-surface);
   border-top: 1px solid var(--glpichat-line);
@@ -1793,7 +1865,7 @@ body.glpichat-guest-page {
   }
   
   .glpichat-guest-page .glpichat-messages {
-    padding: 12px;
+    padding: 12px 12px 36px 12px;
   }
   
   .glpichat-guest-page .glpichat-send {
@@ -1839,4 +1911,72 @@ body.glpichat-guest-page {
   }
 }
 
+/* Typing Indicator Style - Dynamic presence overlay */
+.glpichat-typing-indicator {
+  align-self: stretch;
+  z-index: 10;
+  background: color-mix(in srgb, var(--glpichat-surface) 92%, transparent);
+  backdrop-filter: blur(4px);
+  border-top: 1px solid var(--glpichat-line);
+  padding: 6px 12px;
+  font-size: 11px;
+  color: var(--glpichat-muted);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.03);
+  /* High-impact Spring Transitions */
+  transition: opacity 350ms cubic-bezier(0.34, 1.56, 0.64, 1), 
+              transform 350ms cubic-bezier(0.34, 1.56, 0.64, 1), 
+              max-height 250ms ease, 
+              padding 250ms ease, 
+              border-width 250ms ease;
+  transform: translateY(0);
+  opacity: 1;
+  max-height: 40px;
+  overflow: hidden;
+}
+
+.glpichat-typing-indicator[hidden] {
+  /* Override HTML hidden to allow graceful CSS exit/enter */
+  display: flex !important;
+  opacity: 0;
+  transform: translateY(12px);
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  border-width: 0;
+  pointer-events: none;
+}
+
+.glpichat-guest-page .glpichat-typing-indicator {
+  grid-row: 3;
+}
+
+.glpichat-typing-indicator::before {
+  content: "";
+  display: block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--glpichat-primary);
+  animation: glpichat-typing-pulse 1s cubic-bezier(0.4, 0, 0.2, 1) infinite alternate;
+  margin-right: 4px;
+}
+
+.glpichat-typing-indicator::after {
+  content: "";
+  display: none;
+}
+
+@keyframes glpichat-typing-pulse {
+  from {
+    transform: scale(0.6);
+    opacity: 0.3;
+  }
+  to {
+    transform: scale(1.3);
+    opacity: 1;
+  }
+}
 

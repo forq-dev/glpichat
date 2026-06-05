@@ -17,15 +17,22 @@ use Symfony\Component\Routing\Attribute\Route;
 use function glpichat_assert_can_read_room;
 use function glpichat_current_user_id;
 use function glpichat_events;
+use function glpichat_get_typing_participants;
 use function glpichat_list_user_channels;
 use function glpichat_mark_read;
+use function glpichat_room_last_event_id;
+use function glpichat_room_last_message_id;
 use function glpichat_messages;
 use function glpichat_messages_before;
 use function glpichat_participant_id_for_user;
 use function glpichat_require_logged_csrf;
 use function glpichat_room_by_id;
 use function glpichat_room_id;
+use function glpichat_ticket_status;
 use function glpichat_unread_count;
+use function glpichat_update_participant_activity;
+use function glpichat_expire_inactive_user_participants;
+use function glpichat_disconnect_user_participant;
 
 require_once dirname(__DIR__) . '/functions.php';
 
@@ -59,6 +66,10 @@ final class WidgetController extends AbstractController
             $input = $request->request->all();
             glpichat_require_logged_csrf($input);
             $users_id = glpichat_current_user_id();
+
+            // Expiração oportunista de inatividade curta (2 min)
+            glpichat_expire_inactive_user_participants();
+
             $channels = $request->request->all('channels');
 
             $result = [];
@@ -68,33 +79,44 @@ final class WidgetController extends AbstractController
                     break;
                 }
 
-                $tickets_id = (int) ($channel['tickets_id'] ?? 0);
-                $room_type = (string) ($channel['room_type'] ?? '');
-                $after_id = (int) ($channel['after_id'] ?? 0);
-                $after_event_id = (int) ($channel['after_event_id'] ?? 0);
-                if ($tickets_id <= 0 || !in_array($room_type, ['public', 'internal'], true)) {
+                try {
+                    $tickets_id = (int) ($channel['tickets_id'] ?? 0);
+                    $room_type = (string) ($channel['room_type'] ?? '');
+                    $after_id = (int) ($channel['after_id'] ?? 0);
+                    $after_event_id = (string) ($channel['after_event_id'] ?? '');
+                    $is_typing = (bool) ($channel['is_typing'] ?? false);
+                    if ($tickets_id <= 0 || !in_array($room_type, ['public', 'internal'], true)) {
+                        continue;
+                    }
+
+                    glpichat_assert_can_read_room($tickets_id, $room_type);
+                    $rooms_id = glpichat_room_id($tickets_id, $room_type);
+                    $participants_id = glpichat_participant_id_for_user($rooms_id, $users_id);
+                    if ($participants_id > 0) {
+                        glpichat_update_participant_activity($participants_id, $is_typing);
+                    }
+                    $messages = glpichat_messages($rooms_id, $after_id);
+                    $events = glpichat_events($rooms_id, $after_event_id);
+                    $typing_names = glpichat_get_typing_participants($rooms_id, $participants_id);
+
+                    $key = $tickets_id . ':' . $room_type;
+                    $result[$key] = [
+                        'rooms_id' => $rooms_id,
+                        'tickets_id' => $tickets_id,
+                        'room_type' => $room_type,
+                        'messages' => $messages,
+                        'events' => $events,
+                        'ticket_status' => glpichat_ticket_status($tickets_id),
+                        'last_message_id' => glpichat_room_last_message_id($rooms_id),
+                        'last_event_id' => glpichat_room_last_event_id($rooms_id),
+                        'participants_id' => $participants_id,
+                        'unread_count' => glpichat_unread_count($rooms_id, $participants_id),
+                        'typing_names' => $typing_names,
+                    ];
+                    $count++;
+                } catch (RuntimeException $channel_error) {
                     continue;
                 }
-
-                glpichat_assert_can_read_room($tickets_id, $room_type);
-                $rooms_id = glpichat_room_id($tickets_id, $room_type);
-                $participants_id = glpichat_participant_id_for_user($rooms_id, $users_id);
-                $messages = glpichat_messages($rooms_id, $after_id);
-                $events = glpichat_events($rooms_id, $after_event_id);
-
-                $key = $tickets_id . ':' . $room_type;
-                $result[$key] = [
-                    'rooms_id' => $rooms_id,
-                    'tickets_id' => $tickets_id,
-                    'room_type' => $room_type,
-                    'messages' => $messages,
-                    'events' => $events,
-                    'last_message_id' => count($messages) > 0 ? (int) end($messages)['id'] : $after_id,
-                    'last_event_id' => count($events) > 0 ? (int) end($events)['id'] : $after_event_id,
-                    'participants_id' => $participants_id,
-                    'unread_count' => glpichat_unread_count($rooms_id, $participants_id),
-                ];
-                $count++;
             }
 
             return new JsonResponse([
@@ -122,9 +144,19 @@ final class WidgetController extends AbstractController
 
             $room = glpichat_room_by_id($rooms_id);
             glpichat_assert_can_read_room((int) $room['tickets_id'], (string) $room['room_type']);
+            $participants_id = glpichat_participant_id_for_user($rooms_id, glpichat_current_user_id());
+            if ($participants_id > 0) {
+                glpichat_update_participant_activity($participants_id, false);
+            }
+
+            $events = [];
+            if ($before_id === 0) {
+                $events = glpichat_events($rooms_id, '');
+            }
 
             return new JsonResponse([
                 'messages' => glpichat_messages_before($rooms_id, $before_id, $limit),
+                'events'   => $events,
             ]);
         } catch (RuntimeException $e) {
             return new JsonResponse(['error' => $e->getMessage()], 400);
@@ -155,6 +187,33 @@ final class WidgetController extends AbstractController
                 'ok' => true,
                 'last_read_message_id' => $persisted_last_read_message_id,
                 'unread_count' => glpichat_unread_count($rooms_id, $participants_id),
+                '_glpi_csrf_token' => Session::getNewCSRFToken(),
+            ]);
+        } catch (RuntimeException $e) {
+            return new JsonResponse(['error' => $e->getMessage()], 400);
+        }
+    }
+
+    #[Route('/Widget/Leave', name: 'glpichat_widget_leave', methods: ['POST'])]
+    #[SecurityStrategy(Firewall::STRATEGY_AUTHENTICATED)]
+    public function leave(Request $request): Response
+    {
+        try {
+            $input = $request->request->all();
+            glpichat_require_logged_csrf($input);
+            $users_id = glpichat_current_user_id();
+
+            $rooms_id = $request->request->getInt('rooms_id');
+            if ($rooms_id <= 0) {
+                throw new RuntimeException('Invalid room parameter.');
+            }
+
+            $room = glpichat_room_by_id($rooms_id);
+            glpichat_assert_can_read_room((int) $room['tickets_id'], (string) $room['room_type']);
+            glpichat_disconnect_user_participant($rooms_id, $users_id);
+
+            return new JsonResponse([
+                'ok' => true,
                 '_glpi_csrf_token' => Session::getNewCSRFToken(),
             ]);
         } catch (RuntimeException $e) {

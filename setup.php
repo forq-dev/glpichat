@@ -9,7 +9,7 @@ use GlpiPlugin\Glpichat\HookHandler;
 use GlpiPlugin\Glpichat\ProfileTab;
 use GlpiPlugin\Glpichat\TicketTab;
 
-define('PLUGIN_GLPICHAT_VERSION', '1.0.0');
+define('PLUGIN_GLPICHAT_VERSION', '1.0.2');
 
 require_once __DIR__ . '/src/functions.php';
 
@@ -17,12 +17,28 @@ function plugin_init_glpichat(): void
 {
     global $PLUGIN_HOOKS;
 
+    glpichat_ensure_runtime_schema();
+    $rights_model_changed = glpichat_ensure_profile_rights_model();
+    if (
+        $rights_model_changed
+        && Session::getLoginUserID() !== false
+        && isset($_SESSION['glpiactiveprofile']['id'])
+    ) {
+        Session::reloadCurrentProfile();
+    }
+
     $PLUGIN_HOOKS['csrf_compliant']['glpichat'] = true;
-    $PLUGIN_HOOKS[Hooks::ADD_CSS]['glpichat'] = ['public/css/glpichat.css'];
-    $PLUGIN_HOOKS[Hooks::ADD_JAVASCRIPT]['glpichat'] = ['public/js/glpichat.js'];
-    $PLUGIN_HOOKS['add_css']['glpichat'] = ['public/css/glpichat.css'];
-    $PLUGIN_HOOKS['add_javascript']['glpichat'] = ['public/js/glpichat.js'];
+    $PLUGIN_HOOKS['config_page']['glpichat'] = 'front/config.php';
+    if (Session::getLoginUserID() !== false && glpichat_can_bootstrap_widget()) {
+        $PLUGIN_HOOKS[Hooks::ADD_CSS]['glpichat'] = ['public/css/glpichat.css'];
+        // Load glpichat-widget.js as traditional script (ES6 modules will be handled in Bundling Phase 5)
+        $PLUGIN_HOOKS[Hooks::ADD_JAVASCRIPT]['glpichat'] = ['public/js/glpichat-widget.js'];
+        $PLUGIN_HOOKS['add_css']['glpichat'] = ['public/css/glpichat.css'];
+        $PLUGIN_HOOKS['add_javascript']['glpichat'] = ['public/js/glpichat-widget.js'];
+    }
     $PLUGIN_HOOKS[Hooks::ITEM_ADD]['glpichat'] = [HookHandler::class, 'itemAdd'];
+    $PLUGIN_HOOKS[Hooks::PRE_ITEM_UPDATE]['glpichat'] = [HookHandler::class, 'preItemUpdate'];
+    $PLUGIN_HOOKS[Hooks::ITEM_UPDATE]['glpichat'] = [HookHandler::class, 'itemUpdate'];
     $PLUGIN_HOOKS[Hooks::ITEM_GET_EVENTS]['glpichat'] = [NotificationTargetTicket::class => [HookHandler::class, 'itemGetEvents']];
     $PLUGIN_HOOKS[Hooks::ITEM_GET_DATA]['glpichat'] = [NotificationTargetTicket::class => [HookHandler::class, 'itemGetDatas']];
 

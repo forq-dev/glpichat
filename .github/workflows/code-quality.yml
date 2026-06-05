@@ -12,7 +12,7 @@ on:
     types: [opened, synchronize, reopened]
 
 permissions:
-  contents: read
+  pull-requests: read # Permite que o SonarCloud comente diretamente nos seus Pull Requests
 
 jobs:
   sonarqube:
@@ -25,18 +25,12 @@ jobs:
       with:
         fetch-depth: 0 
 
-    - name: Set up JDK 17
-      uses: actions/setup-java@v4
-      with:
-        distribution: 'temurin'
-        java-version: '17'
-
-    - name: SonarQube Scan
-      uses: sonarsource/sonarqube-scan-action@v6
-      with:
-        args: >
-          -Dsonar.organization=${{ secrets.SONAR_ORG }}
-          -Dsonar.projectKey=glpichat
-          -Dsonar.branch.name=${{ github.head_ref || github.ref_name }}
+    - name: SonarCloud Scan
+      uses: SonarSource/sonarcloud-github-action@v3.0.0
       env:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      with:
+        args:
+          -Dsonar.projectKey=glpichat
+          -Dsonar.organization=${{ secrets.SONAR_ORG }}
+        projectBaseDir: .

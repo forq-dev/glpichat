@@ -131,17 +131,24 @@ glpichat_unit_assert_same(
 glpichat_unit_pass('Guest timeout notification keeps expected label');
 
 glpichat_unit_assert_same(
-    '##glpichat.sender_name##: ##glpichat.message_preview## ##glpichat.unread_badge##',
-    glpichat_default_template_text(),
-    'Default text template stays canonical'
+    '##ticket.id## - ##ticket.title##',
+    glpichat_default_template_subject(),
+    'Default subject uses native GLPI ticket tags'
 );
-glpichat_unit_pass('Default text template stays canonical');
+glpichat_unit_pass('Default subject uses native GLPI ticket tags');
 
 glpichat_unit_assert_same(
-    '<p>##glpichat.sender_name##: ##glpichat.message_preview## ##glpichat.unread_badge##</p>',
-    glpichat_default_template_html(),
-    'Default HTML template stays canonical'
+    '##glpichat.event_action## no chamado ##ticket.id## por ##glpichat.sender_name##',
+    glpichat_default_template_text(),
+    'Default text template uses event_action and ticket.id tags'
 );
-glpichat_unit_pass('Default HTML template stays canonical');
+glpichat_unit_pass('Default text template uses event_action and ticket.id tags');
+
+glpichat_unit_assert_same(
+    '<p>##glpichat.event_action## no chamado ##ticket.id## por ##glpichat.sender_name##</p>',
+    glpichat_default_template_html(),
+    'Default HTML template uses event_action and ticket.id tags'
+);
+glpichat_unit_pass('Default HTML template uses event_action and ticket.id tags');
 
 fwrite(STDOUT, "[PASS] Domain unit tests completed\n");

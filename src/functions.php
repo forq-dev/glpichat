@@ -557,30 +557,13 @@ function glpichat_raise_guest_left_timeout_notification_event(int $tickets_id, s
     }
 }
 
-function glpichat_latest_message_for_ticket(int $tickets_id): array
+/**
+ * @param array<string, mixed> $row
+ * @return array{sender_name:string,preview:string}
+ */
+function glpichat_notification_message_summary_from_row(array $row): array
 {
     global $DB;
-
-    $row = $DB->request([
-        'SELECT' => [
-            'id',
-            'content',
-            'participant_type',
-            'users_id',
-            'participants_id',
-        ],
-        'FROM' => 'glpi_plugin_glpichat_messages',
-        'WHERE' => ['tickets_id' => $tickets_id],
-        'ORDER' => ['id DESC'],
-        'LIMIT' => 1,
-    ])->current();
-
-    if (!is_array($row)) {
-        return [
-            'sender_name' => 'Sistema',
-            'preview' => 'Nova mensagem no chat',
-        ];
-    }
 
     $sender_name = 'Sistema';
     $actor_type = (string) ($row['participant_type'] ?? '');
@@ -614,6 +597,62 @@ function glpichat_latest_message_for_ticket(int $tickets_id): array
         ),
         'preview' => glpichat_message_preview((string) ($row['content'] ?? ''), 'Nova mensagem no chat', 180),
     ];
+}
+
+function glpichat_latest_message_for_ticket(int $tickets_id): array
+{
+    global $DB;
+
+    $row = $DB->request([
+        'SELECT' => [
+            'id',
+            'content',
+            'participant_type',
+            'users_id',
+            'participants_id',
+        ],
+        'FROM' => 'glpi_plugin_glpichat_messages',
+        'WHERE' => ['tickets_id' => $tickets_id],
+        'ORDER' => ['id DESC'],
+        'LIMIT' => 1,
+    ])->current();
+
+    if (!is_array($row)) {
+        return [
+            'sender_name' => 'Sistema',
+            'preview' => 'Nova mensagem no chat',
+        ];
+    }
+
+    return glpichat_notification_message_summary_from_row($row);
+}
+
+function glpichat_latest_message_for_room(int $rooms_id): array
+{
+    global $DB;
+
+    $row = $DB->request([
+        'SELECT' => [
+            'id',
+            'content',
+            'participant_type',
+            'users_id',
+            'participants_id',
+        ],
+        'FROM' => 'glpi_plugin_glpichat_messages',
+        'WHERE' => ['rooms_id' => $rooms_id],
+        'ORDER' => ['id DESC'],
+        'LIMIT' => 1,
+    ])->current();
+
+    if (!is_array($row)) {
+        return [
+            'sender_name' => 'Sistema',
+            'preview' => 'Nova mensagem no chat',
+        ];
+    }
+
+    return glpichat_notification_message_summary_from_row($row);
 }
 
 function glpichat_unread_count_for_user_ticket(int $users_id, int $tickets_id): int
@@ -651,6 +690,29 @@ function glpichat_unread_count_for_user_ticket(int $users_id, int $tickets_id): 
         $participant_rows,
         'glpichat_unread_count_fast'
     );
+}
+
+function glpichat_unread_count_for_user_room(int $users_id, int $rooms_id): int
+{
+    $participants_id = glpichat_active_participant_id_for_user($rooms_id, $users_id);
+
+    if ($participants_id <= 0) {
+        return 0;
+    }
+
+    return glpichat_unread_count_fast($rooms_id, $participants_id);
+}
+
+function glpichat_can_user_read_notification_room(int $users_id, int $tickets_id, string $room_type): bool
+{
+    if ($users_id <= 0 || !glpichat_is_valid_room_type($room_type)) {
+        return false;
+    }
+
+    $ticket = glpichat_ticket_or_fail($tickets_id);
+    $entities_id = (int) ($ticket->fields['entities_id'] ?? 0);
+
+    return Profile::haveUserRight($users_id, glpichat_read_right_name($room_type), READ, $entities_id);
 }
 
 function glpichat_add_message(

@@ -14,9 +14,16 @@ use NotificationTargetTicket;
 use Ticket;
 
 use function glpichat_add_message;
+use function glpichat_can_user_read_notification_room;
+use function glpichat_display_unread_count;
 use function glpichat_is_ticket_terminal_status;
+use function glpichat_latest_message_for_room;
+use function glpichat_notification_message_data;
 use function glpichat_record_event;
 use function glpichat_room_id;
+use function glpichat_unread_count_for_user_room;
+
+require_once __DIR__ . '/flows/notification_flow.php';
 
 final class HookHandler
 {
@@ -39,6 +46,20 @@ final class HookHandler
 
     public static function itemGetDatas(mixed $target): void
     {
+        $event_action_map = [
+            'glpichat_public_message' => 'Nova mensagem do solicitante',
+            'glpichat_internal_message' => 'Nova mensagem interna',
+            'glpichat_guest_message' => 'Nova mensagem de convidado',
+            'glpichat_guest_joined' => 'Convidado entrou no chat',
+            'glpichat_guest_left' => 'Convidado saiu do chat',
+            'glpichat_guest_left_timeout' => 'Sessao do convidado expirou',
+        ];
+
+        $channel_type_map = [
+            GLPICHAT_ROOM_PUBLIC => 'Solicitante',
+            GLPICHAT_ROOM_INTERNAL => 'Discussao tecnica',
+        ];
+
         if (!$target instanceof NotificationTargetTicket) {
             return;
         }
@@ -55,9 +76,11 @@ final class HookHandler
 
         if ($event === 'glpichat_guest_joined') {
             $guest_name = (string) ($target->options['glpichat_guest_name'] ?? 'Convidado');
-            $target->data['##glpichat.ticket_label##'] = sprintf('%s #%d', (string) ($ticket->fields['name'] ?? 'Chamado'), (int) $ticket->getID());
-            $target->data['##glpichat.sender_name##'] = 'Sistema';
-            $target->data['##glpichat.message_preview##'] = sprintf('Convidado %s entrou no chat.', $guest_name);
+            $target->data['##glpichat.event_action##'] = $event_action_map[$event];
+            $target->data['##glpichat.sender_name##'] = $guest_name;
+            $target->data['##glpichat.guest_name##'] = $guest_name;
+            $target->data['##glpichat.message_preview##'] = '';
+            $target->data['##glpichat.channel_type##'] = '';
             $target->data['##glpichat.unread_count##'] = '0';
             $target->data['##glpichat.unread_badge##'] = '';
             return;
@@ -65,9 +88,11 @@ final class HookHandler
 
         if ($event === 'glpichat_guest_left') {
             $guest_name = (string) ($target->options['glpichat_guest_name'] ?? 'Convidado');
-            $target->data['##glpichat.ticket_label##'] = sprintf('%s #%d', (string) ($ticket->fields['name'] ?? 'Chamado'), (int) $ticket->getID());
-            $target->data['##glpichat.sender_name##'] = 'Sistema';
-            $target->data['##glpichat.message_preview##'] = sprintf('Convidado %s saiu do chat.', $guest_name);
+            $target->data['##glpichat.event_action##'] = $event_action_map[$event];
+            $target->data['##glpichat.sender_name##'] = $guest_name;
+            $target->data['##glpichat.guest_name##'] = $guest_name;
+            $target->data['##glpichat.message_preview##'] = '';
+            $target->data['##glpichat.channel_type##'] = '';
             $target->data['##glpichat.unread_count##'] = '0';
             $target->data['##glpichat.unread_badge##'] = '';
             return;
@@ -75,9 +100,11 @@ final class HookHandler
 
         if ($event === 'glpichat_guest_left_timeout') {
             $guest_name = (string) ($target->options['glpichat_guest_name'] ?? 'Convidado');
-            $target->data['##glpichat.ticket_label##'] = sprintf('%s #%d', (string) ($ticket->fields['name'] ?? 'Chamado'), (int) $ticket->getID());
-            $target->data['##glpichat.sender_name##'] = 'Sistema';
-            $target->data['##glpichat.message_preview##'] = sprintf('Sessão do convidado %s expirou por inatividade.', $guest_name);
+            $target->data['##glpichat.event_action##'] = $event_action_map[$event];
+            $target->data['##glpichat.sender_name##'] = $guest_name;
+            $target->data['##glpichat.guest_name##'] = $guest_name;
+            $target->data['##glpichat.message_preview##'] = '';
+            $target->data['##glpichat.channel_type##'] = '';
             $target->data['##glpichat.unread_count##'] = '0';
             $target->data['##glpichat.unread_badge##'] = '';
             return;
@@ -85,15 +112,25 @@ final class HookHandler
 
         $recipient = $target->recipient_data;
         $users_id = (int) ($recipient['items_id'] ?? 0);
-        $message = glpichat_latest_message_for_ticket((int) $ticket->getID());
-        $raw_unread = $users_id > 0 ? glpichat_unread_count_for_user_ticket($users_id, (int) $ticket->getID()) : 0;
-        $display_unread = glpichat_display_unread_count($raw_unread);
+        $message_data = glpichat_notification_message_data(
+            $event,
+            (int) $ticket->getID(),
+            $users_id,
+            'glpichat_room_id',
+            'glpichat_can_user_read_notification_room',
+            'glpichat_latest_message_for_room',
+            'glpichat_unread_count_for_user_room',
+            'glpichat_display_unread_count'
+        );
 
-        $target->data['##glpichat.ticket_label##'] = sprintf('%s #%d', (string) ($ticket->fields['name'] ?? 'Chamado'), (int) $ticket->getID());
-        $target->data['##glpichat.sender_name##'] = (string) ($message['sender_name'] ?? 'Sistema');
-        $target->data['##glpichat.message_preview##'] = (string) ($message['preview'] ?? 'Nova mensagem no chat');
-        $target->data['##glpichat.unread_count##'] = (string) $display_unread;
-        $target->data['##glpichat.unread_badge##'] = $display_unread > 0 ? sprintf('(%d)', $display_unread) : '';
+        $room_type = (string) ($target->options['glpichat_room_type'] ?? '');
+        $target->data['##glpichat.event_action##'] = $event_action_map[$event];
+        $target->data['##glpichat.sender_name##'] = $message_data['sender_name'];
+        $target->data['##glpichat.guest_name##'] = '';
+        $target->data['##glpichat.message_preview##'] = $message_data['preview'];
+        $target->data['##glpichat.channel_type##'] = $channel_type_map[$room_type] ?? '';
+        $target->data['##glpichat.unread_count##'] = $message_data['unread_count'];
+        $target->data['##glpichat.unread_badge##'] = $message_data['unread_badge'];
     }
 
     public static function preItemUpdate(CommonDBTM $item): void

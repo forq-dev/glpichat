@@ -46,7 +46,7 @@ function glpichat_send_message_use_case(
     $users_id = (int) $current_user_id();
     $rooms_id = (int) $room_id($tickets_id, $room_type);
     $participants_id = (int) $participant_id_for_user($rooms_id, $users_id);
-    $followups_id = (int) $add_followup($tickets_id, $users_id, $validated_content, $room_type === GLPICHAT_ROOM_INTERNAL);
+    $followups_id = (int) $add_followup($tickets_id, $users_id, $validated_content, glpichat_is_private_room_type($room_type));
 
     return (int) $add_message(
         $tickets_id,
@@ -81,7 +81,7 @@ function glpichat_upload_message_use_case(
     $users_id = (int) $current_user_id();
     $documents_id = (int) $upload_document($tickets_id, $validated_file, true);
     $content = glpichat_attachment_message_content($validated_file->getClientOriginalName(), $source_label);
-    $followups_id = (int) $add_followup($tickets_id, $users_id, $content, false);
+    $followups_id = (int) $add_followup($tickets_id, $users_id, $content, glpichat_is_private_room_type($room_type));
     $rooms_id = (int) $room_id($tickets_id, $room_type);
     $participants_id = (int) $participant_id_for_user($rooms_id, $users_id);
     $message_id = (int) $add_message(

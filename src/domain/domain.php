@@ -65,6 +65,11 @@ function glpichat_is_valid_room_type(string $room_type): bool
     return in_array($room_type, glpichat_room_types(), true);
 }
 
+function glpichat_is_private_room_type(string $room_type): bool
+{
+    return $room_type === GLPICHAT_ROOM_INTERNAL;
+}
+
 function glpichat_is_valid_actor_type(string $actor_type): bool
 {
     return in_array($actor_type, glpichat_actor_types(), true);
@@ -128,17 +133,17 @@ function glpichat_default_notification_events(): array
 
 function glpichat_default_template_subject(): string
 {
-    return '##glpichat.ticket_label##';
+    return '##ticket.id## - ##ticket.title##';
 }
 
 function glpichat_default_template_text(): string
 {
-    return '##glpichat.sender_name##: ##glpichat.message_preview## ##glpichat.unread_badge##';
+    return '##glpichat.event_action## no chamado ##ticket.id## por ##glpichat.sender_name##';
 }
 
 function glpichat_default_template_html(): string
 {
-    return '<p>##glpichat.sender_name##: ##glpichat.message_preview## ##glpichat.unread_badge##</p>';
+    return '<p>##glpichat.event_action## no chamado ##ticket.id## por ##glpichat.sender_name##</p>';
 }
 
 function glpichat_display_unread_count(int $raw_unread): int

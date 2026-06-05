@@ -1644,14 +1644,21 @@ import {
       .sort((a, b) => b.id - a.id);
 
     const ticketRows = filteredTickets.map((ticket) => {
-      const publicUnread = Number(state.channels.get(ticket.channels.public || "")?.unread_count || 0);
-      const internalUnread = Number(state.channels.get(ticket.channels.internal || "")?.unread_count || 0);
+      const badges = [];
+      if (ticket.channels.public) {
+        const publicUnread = Number(state.channels.get(ticket.channels.public)?.unread_count || 0);
+        badges.push(`<i class="glpichat-notification-badge glpichat-notification-badge-public" title="Solicitante">${publicUnread}</i>`);
+      }
+      if (ticket.channels.internal) {
+        const internalUnread = Number(state.channels.get(ticket.channels.internal)?.unread_count || 0);
+        badges.push(`<i class="glpichat-notification-badge glpichat-notification-badge-internal" title="Discussão técnica">${internalUnread}</i>`);
+      }
+      const badgesHtml = badges.length > 0
+        ? `<span class="glpichat-notification-badges">${badges.join("")}</span>`
+        : "";
       return `<button type="button" class="glpichat-ticket-filter-item" data-ticket-id="${ticket.id}">
         <span class="glpichat-notification-label">Chamado #${ticket.id} <small>${statusLabel(statusKeyFromCode(ticket.status))}</small></span>
-        <span class="glpichat-notification-badges">
-          <i class="glpichat-notification-badge glpichat-notification-badge-public" title="Solicitante">${publicUnread}</i>
-          <i class="glpichat-notification-badge glpichat-notification-badge-internal" title="Discussão técnica">${internalUnread}</i>
-        </span>
+        ${badgesHtml}
       </button>`;
     }).join("");
 

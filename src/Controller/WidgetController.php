@@ -26,7 +26,6 @@ use function glpichat_messages;
 use function glpichat_messages_before;
 use function glpichat_participant_id_for_user;
 use function glpichat_require_logged_csrf;
-use function glpichat_room_by_id;
 use function glpichat_room_id;
 use function glpichat_ticket_status;
 use function glpichat_unread_count;
@@ -35,6 +34,7 @@ use function glpichat_expire_inactive_user_participants;
 use function glpichat_disconnect_user_participant;
 
 require_once dirname(__DIR__) . '/functions.php';
+require_once dirname(__DIR__) . '/flows/widget_access_flow.php';
 
 final class WidgetController extends AbstractController
 {
@@ -142,8 +142,11 @@ final class WidgetController extends AbstractController
                 throw new RuntimeException('Invalid history parameters.');
             }
 
-            $room = glpichat_room_by_id($rooms_id);
-            glpichat_assert_can_read_room((int) $room['tickets_id'], (string) $room['room_type']);
+            glpichat_widget_readable_room_or_fail(
+                $rooms_id,
+                'glpichat_room_by_id',
+                'glpichat_assert_can_read_room'
+            );
             $participants_id = glpichat_participant_id_for_user($rooms_id, glpichat_current_user_id());
             if ($participants_id > 0) {
                 glpichat_update_participant_activity($participants_id, false);
@@ -178,8 +181,11 @@ final class WidgetController extends AbstractController
                 throw new RuntimeException('Invalid mark read parameters.');
             }
 
-            $room = glpichat_room_by_id($rooms_id);
-            glpichat_assert_can_read_room((int) $room['tickets_id'], (string) $room['room_type']);
+            glpichat_widget_readable_room_or_fail(
+                $rooms_id,
+                'glpichat_room_by_id',
+                'glpichat_assert_can_read_room'
+            );
             $participants_id = glpichat_participant_id_for_user($rooms_id, $users_id);
             $persisted_last_read_message_id = glpichat_mark_read($rooms_id, $participants_id, $last_read_message_id);
 
@@ -208,8 +214,11 @@ final class WidgetController extends AbstractController
                 throw new RuntimeException('Invalid room parameter.');
             }
 
-            $room = glpichat_room_by_id($rooms_id);
-            glpichat_assert_can_read_room((int) $room['tickets_id'], (string) $room['room_type']);
+            glpichat_widget_readable_room_or_fail(
+                $rooms_id,
+                'glpichat_room_by_id',
+                'glpichat_assert_can_read_room'
+            );
             glpichat_disconnect_user_participant($rooms_id, $users_id);
 
             return new JsonResponse([

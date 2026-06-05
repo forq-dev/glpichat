@@ -186,6 +186,72 @@ glpichat_unit_assert_same_array(
 );
 glpichat_unit_pass('Upload use case orchestrates dependencies in canonical order');
 
+$internal_upload_call_log = [];
+$internal_upload_result = glpichat_upload_message_use_case(
+    19,
+    GLPICHAT_ROOM_INTERNAL,
+    $uploaded_file,
+    'GLPI Chat',
+    static function (int $tickets_id, string $room_type) use (&$internal_upload_call_log): void {
+        $internal_upload_call_log[] = ['assert_can_send', $tickets_id, $room_type];
+    },
+    static function () use (&$internal_upload_call_log): int {
+        $internal_upload_call_log[] = ['current_user_id'];
+        return 81;
+    },
+    static function (int $tickets_id, UploadedFile $file, bool $suppress_hook) use (&$internal_upload_call_log): int {
+        $internal_upload_call_log[] = ['upload_document', $tickets_id, $file->getClientOriginalName(), $suppress_hook];
+        return 82;
+    },
+    static function (int $tickets_id, int $users_id, string $content, bool $is_private) use (&$internal_upload_call_log): int {
+        $internal_upload_call_log[] = ['add_followup', $tickets_id, $users_id, $content, $is_private];
+        return 83;
+    },
+    static function (int $tickets_id, string $room_type) use (&$internal_upload_call_log): int {
+        $internal_upload_call_log[] = ['room_id', $tickets_id, $room_type];
+        return 84;
+    },
+    static function (int $rooms_id, int $users_id) use (&$internal_upload_call_log): int {
+        $internal_upload_call_log[] = ['participant_id_for_user', $rooms_id, $users_id];
+        return 85;
+    },
+    static function (
+        int $tickets_id,
+        string $room_type,
+        string $actor_type,
+        int $users_id,
+        int $participants_id,
+        string $content,
+        int $documents_id,
+        int $itilfollowups_id
+    ) use (&$internal_upload_call_log): int {
+        $internal_upload_call_log[] = ['add_message', $tickets_id, $room_type, $actor_type, $users_id, $participants_id, $content, $documents_id, $itilfollowups_id];
+        return 86;
+    }
+);
+
+glpichat_unit_assert_same_array(
+    ['message_id' => 86, 'documents_id' => 82],
+    $internal_upload_result,
+    'Internal upload use case returns created message and document ids'
+);
+glpichat_unit_pass('Internal upload use case returns created message and document ids');
+
+glpichat_unit_assert_same_array(
+    [
+        ['assert_can_send', 19, 'internal'],
+        ['current_user_id'],
+        ['upload_document', 19, 'fixture.txt', true],
+        ['add_followup', 19, 81, 'Attachment added from GLPI Chat: fixture.txt', true],
+        ['room_id', 19, 'internal'],
+        ['participant_id_for_user', 84, 81],
+        ['add_message', 19, 'internal', 'user', 81, 85, 'Attachment added from GLPI Chat: fixture.txt', 82, 83],
+    ],
+    $internal_upload_call_log,
+    'Internal upload use case keeps followup privacy aligned with room type'
+);
+glpichat_unit_pass('Internal upload use case keeps followup privacy aligned with room type');
+
 @unlink($upload_fixture);
 
 fwrite(STDOUT, "[PASS] Message flow unit tests completed\n");

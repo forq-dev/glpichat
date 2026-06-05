@@ -11,8 +11,10 @@ on:
       - develop
     types: [opened, synchronize, reopened]
 
+# 1. CORREÇÃO: Garante permissão para clonar o código e ler PRs
 permissions:
-  pull-requests: read # Permite que o SonarCloud comente diretamente nos seus Pull Requests
+  contents: read
+  pull-requests: read
 
 jobs:
   sonarqube:
@@ -20,6 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
+    # 2. CORREÇÃO: Checkout limpo, sem travar credenciais manuais
     - name: Checkout Repository
       uses: actions/checkout@v4
       with:

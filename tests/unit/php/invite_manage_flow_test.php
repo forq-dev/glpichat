@@ -211,13 +211,44 @@ glpichat_unit_assert_same_array(
 );
 glpichat_unit_pass('Invite revoke flow enforces canonical revoke sequence');
 
+// G5 — Reissue of a revoked invite must be rejected
+try {
+    glpichat_reissue_invite_use_case(
+        60,
+        'https://glpi.example/',
+        static function (int $invite_id): array {
+            return ['id' => 60, 'rooms_id' => 61, 'tickets_id' => 62, 'accepted_at' => '', 'revoked_at' => '2026-06-06 00:00:00'];
+        },
+        static function (int $tickets_id): void {
+        },
+        static function (): string {
+            return 'should-not-reach';
+        },
+        static function (): int {
+            return 63;
+        },
+        static function (int $invite_id, string $token_hash, string $expires_at): void {
+        },
+        static function (int $rooms_id, int $tickets_id, string $event_type, string $actor_type, int $users_id, int $participants_id, array $payload): void {
+        },
+        GLPICHAT_INVITE_TTL_SECONDS
+    );
+    glpichat_unit_fail('G5: Reissue of revoked invite must throw RuntimeException');
+} catch (RuntimeException $error) {
+    glpichat_unit_assert_true(
+        str_contains($error->getMessage(), 'Revoked invite cannot be reissued.'),
+        'G5: Reissue of revoked invite is rejected with canonical message'
+    );
+    glpichat_unit_pass('G5: Reissue of revoked invite is rejected with canonical message');
+}
+
 $reissue_calls = [];
 $reissued = glpichat_reissue_invite_use_case(
     60,
     'https://glpi.example/',
     static function (int $invite_id) use (&$reissue_calls): array {
         $reissue_calls[] = ['find_invite', $invite_id];
-        return ['id' => 60, 'rooms_id' => 61, 'tickets_id' => 62, 'accepted_at' => '', 'revoked_at' => '2026-06-01 00:00:00'];
+        return ['id' => 60, 'rooms_id' => 61, 'tickets_id' => 62, 'accepted_at' => '', 'revoked_at' => ''];
     },
     static function (int $tickets_id) use (&$reissue_calls): void {
         $reissue_calls[] = ['assert_can_update_invites', $tickets_id];

@@ -286,6 +286,8 @@ function glpichat_upgrade_right_bits(string $right_name, int $current_rights, in
     }
 
     // If the profile has any write bit but lacks READ, add READ.
+    // This fixes the lockout caused by profiles migrated before READ was exposed
+    // in the UI: those profiles have CREATE=4 but are missing READ=1.
     $has_write_bit = ($current_rights & (CREATE | UPDATE)) !== 0;
     $lacks_read    = ($current_rights & READ) === 0;
 
@@ -293,10 +295,11 @@ function glpichat_upgrade_right_bits(string $right_name, int $current_rights, in
         return $current_rights | READ;
     }
 
-    // If the current value is 0 and a default mask is defined, promote to default.
-    if ($current_rights === 0 && $default_mask > 0) {
-        return $default_mask;
-    }
+    // Do NOT promote an existing row with rights = 0 to the default mask.
+    // A value of 0 on an existing row means an admin explicitly revoked access
+    // for this profile; silently restoring it would bypass that intent.
+    // New rows (no existing row) are handled by the INSERT branch in
+    // glpichat_add_profile_rights() before this function is ever called.
 
     return $current_rights;
 }

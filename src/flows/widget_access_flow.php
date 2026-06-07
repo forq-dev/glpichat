@@ -13,6 +13,6 @@ function glpichat_widget_readable_room_or_fail(
 
         return $room;
     } catch (RuntimeException $error) {
-        throw new RuntimeException('Room unavailable.', 0, $error);
+        throw new RuntimeException('Access denied.', 403, $error);
     }
 }

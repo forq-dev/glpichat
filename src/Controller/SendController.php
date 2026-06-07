@@ -37,6 +37,11 @@ final class SendController extends AbstractController
             $tickets_id = $request->request->getInt('tickets_id');
             $room_type = $request->request->getString('room_type');
             $content = $request->request->getString('content');
+
+            if ($tickets_id <= 0 || !in_array($room_type, ['public', 'internal'], true)) {
+                throw new RuntimeException('Invalid parameters.');
+            }
+
             $message_id = glpichat_send_message_use_case(
                 $tickets_id,
                 $room_type,

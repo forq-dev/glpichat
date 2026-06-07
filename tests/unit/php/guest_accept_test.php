@@ -28,14 +28,36 @@ glpichat_unit_pass('Guest join followup content stays canonical');
 
 try {
     glpichat_assert_valid_accept_invite_result(null);
-    glpichat_unit_fail('Accept invite guard must reject invalid invite');
+    glpichat_unit_fail('Accept invite guard must reject null invite');
 } catch (RuntimeException $error) {
     glpichat_unit_assert_true(
         str_contains($error->getMessage(), 'Invite is invalid, expired, accepted, or revoked.'),
-        'Accept invite guard rejects invalid invite with canonical message'
+        'Accept invite guard rejects null invite with canonical message'
     );
-    glpichat_unit_pass('Accept invite guard rejects invalid invite with canonical message');
+    glpichat_unit_pass('Accept invite guard rejects null invite with canonical message');
 }
+
+// G1 — empty array must be rejected with the same canonical message
+try {
+    glpichat_assert_valid_accept_invite_result([]);
+    glpichat_unit_fail('Accept invite guard must reject empty array invite');
+} catch (RuntimeException $error) {
+    glpichat_unit_assert_true(
+        str_contains($error->getMessage(), 'Invite is invalid, expired, accepted, or revoked.'),
+        'Accept invite guard rejects empty array invite with canonical message'
+    );
+    glpichat_unit_pass('Accept invite guard rejects empty array invite with canonical message');
+}
+
+// G1 — non-empty array must be returned as-is (happy path)
+$valid_invite = ['id' => 1, 'rooms_id' => 2, 'tickets_id' => 3, 'guest_name' => 'Alice', 'guest_email' => 'alice@example.test'];
+$result = glpichat_assert_valid_accept_invite_result($valid_invite);
+glpichat_unit_assert_same_array(
+    $valid_invite,
+    $result,
+    'Accept invite guard returns valid invite array as-is'
+);
+glpichat_unit_pass('Accept invite guard returns valid invite array as-is');
 
 try {
     glpichat_assert_valid_guest_participant(null);
@@ -69,8 +91,9 @@ $accepted = glpichat_accept_invite_use_case(
         $accept_call_log[] = ['create_guest_participant', $rooms_id, $guest_name, $guest_email, $session_hash];
         return 14;
     },
-    static function (int $invite_id, int $participants_id) use (&$accept_call_log): void {
+    static function (int $invite_id, int $participants_id) use (&$accept_call_log): bool {
         $accept_call_log[] = ['mark_invite_accepted', $invite_id, $participants_id];
+        return true;
     },
     static function (
         int $rooms_id,
@@ -123,5 +146,56 @@ glpichat_unit_assert_same_array(
     'Accept invite use case orchestrates canonical security-sensitive flow'
 );
 glpichat_unit_pass('Accept invite use case orchestrates canonical security-sensitive flow');
+
+// F3 — Race condition: mark_invite_accepted returns false → RuntimeException, no session created
+
+$race_session_created = false;
+try {
+    glpichat_accept_invite_use_case(
+        'invite-token',
+        static function (string $token_hash): array {
+            return [
+                'id' => 21,
+                'rooms_id' => 22,
+                'tickets_id' => 23,
+                'guest_name' => 'Bob',
+                'guest_email' => 'bob@example.test',
+            ];
+        },
+        static function (): string {
+            return 'race-session-token';
+        },
+        static function (int $rooms_id, string $guest_name, string $guest_email, string $session_hash) use (&$race_session_created): int {
+            $race_session_created = true;
+            return 24;
+        },
+        static function (int $invite_id, int $participants_id): bool {
+            // Simulate a concurrent accept: another request won the race
+            return false;
+        },
+        static function (int $rooms_id, int $tickets_id, string $event_type, string $actor_type, int $users_id, int $participants_id, array $payload): void {
+        },
+        static function (): int {
+            return 25;
+        },
+        static function (int $tickets_id, int $users_id, string $content, bool $is_private): void {
+        },
+        static function (int $tickets_id, string $guest_name): void {
+        }
+    );
+    glpichat_unit_fail('Race condition: accept use case must throw when mark_invite_accepted returns false');
+} catch (RuntimeException $error) {
+    glpichat_unit_assert_true(
+        str_contains($error->getMessage(), 'Invite is invalid, expired, accepted, or revoked.'),
+        'Race condition: exception message is canonical'
+    );
+    glpichat_unit_pass('Race condition: exception message is canonical');
+}
+
+glpichat_unit_assert_true(
+    $race_session_created,
+    'Race condition: guest participant was created before mark_invite_accepted was called'
+);
+glpichat_unit_pass('Race condition: guest participant was created before mark_invite_accepted was called');
 
 fwrite(STDOUT, "[PASS] Guest accept unit tests completed\n");

@@ -32,6 +32,8 @@ glpichat_unit_assert_same_array(
 );
 glpichat_unit_pass('Widget access helper returns readable room untouched');
 
+// F6 — Both "room not found" and "no permission" must return the same opaque message and code 403
+// to prevent an oracle attack that lets callers distinguish existing from inaccessible rooms.
 foreach (['Chat room not found.', 'User cannot read this room.'] as $raw_message) {
     try {
         glpichat_widget_readable_room_or_fail(
@@ -45,10 +47,17 @@ foreach (['Chat room not found.', 'User cannot read this room.'] as $raw_message
         glpichat_unit_fail('Widget access helper must collapse room lookup and ACL failures.');
     } catch (RuntimeException $error) {
         glpichat_unit_assert_same(
-            'Room unavailable.',
+            'Access denied.',
             $error->getMessage(),
-            'Widget access helper returns canonical unavailable message'
+            'Widget access helper returns unified opaque message (F6: no oracle for room existence)'
         );
+        glpichat_unit_pass('Widget access helper returns unified opaque message for: ' . $raw_message);
+        glpichat_unit_assert_same(
+            403,
+            $error->getCode(),
+            'Widget access helper returns HTTP 403 code (F6)'
+        );
+        glpichat_unit_pass('Widget access helper returns HTTP 403 code for: ' . $raw_message);
     }
 }
 glpichat_unit_pass('Widget access helper collapses lookup and ACL failures');

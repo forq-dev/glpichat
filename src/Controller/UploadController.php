@@ -39,6 +39,10 @@ final class UploadController extends AbstractController
             $room_type = $request->request->getString('room_type');
             $file = $request->files->get('file');
 
+            if ($tickets_id <= 0 || !in_array($room_type, ['public', 'internal'], true)) {
+                throw new RuntimeException('Invalid parameters.');
+            }
+
             $result = glpichat_upload_message_use_case(
                 $tickets_id,
                 $room_type,

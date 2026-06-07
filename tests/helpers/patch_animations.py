@@ -68,7 +68,7 @@ content = re.sub(
     content, flags=re.DOTALL
 )
 content = re.sub(
-    r"(@keyframes\s+glpichat-panel-enter\s*\{[^}]*?to\s*\{[^}]*?)transform:\s*scale\(1\)\s*translateY\(0\);",
+    r"(@keyframes\s+glpichat-panel-enter\s*\{[^}]*to\s*\{[^}]*)transform:\s*scale\(1\)\s*translateY\(0\);",
     r"\1transform: scale(1) translateY(0);\n    filter: blur(0px);",
     content, flags=re.DOTALL
 )
@@ -79,7 +79,7 @@ content = re.sub(
     content, flags=re.DOTALL
 )
 content = re.sub(
-    r"(@keyframes\s+glpichat-panel-exit\s*\{[^}]*?to\s*\{[^}]*?)transform:\s*scale\(0\.96\)\s*translateY\(8px\);",
+    r"(@keyframes\s+glpichat-panel-exit\s*\{[^}]*to\s*\{[^}]*)transform:\s*scale\(0\.96\)\s*translateY\(8px\);",
     r"\1transform: scale(0.95) translateY(8px);\n    filter: blur(4px);",
     content, flags=re.DOTALL
 )

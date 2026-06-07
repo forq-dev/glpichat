@@ -1831,7 +1831,44 @@ import {
 
       const checkEmail = () => {
         const email = emailInput.value.trim();
-        if (email !== "" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        if (email === "") {
+          emailError.textContent = "";
+          emailInput.classList.remove("is-invalid");
+          return true;
+        }
+
+        // Limit maximum email length to prevent ReDoS/excessive backtracking
+        if (email.length > 254) {
+          emailError.textContent = "Por favor, insira um e-mail válido (ex: nome@dominio.com).";
+          emailInput.classList.add("is-invalid");
+          return false;
+        }
+
+        const parts = email.split("@");
+        if (parts.length !== 2) {
+          emailError.textContent = "Por favor, insira um e-mail válido (ex: nome@dominio.com).";
+          emailInput.classList.add("is-invalid");
+          return false;
+        }
+
+        const [local, domain] = parts;
+        if (local.length === 0 || domain.length === 0) {
+          emailError.textContent = "Por favor, insira um e-mail válido (ex: nome@dominio.com).";
+          emailInput.classList.add("is-invalid");
+          return false;
+        }
+
+        // Ensure no whitespace is present in local or domain parts
+        if (/\s/.test(local) || /\s/.test(domain)) {
+          emailError.textContent = "Por favor, insira um e-mail válido (ex: nome@dominio.com).";
+          emailInput.classList.add("is-invalid");
+          return false;
+        }
+
+        // Ensure domain part has at least one dot, and it's not the first or last character
+        const firstDot = domain.indexOf(".");
+        const lastDot = domain.lastIndexOf(".");
+        if (firstDot <= 0 || lastDot === domain.length - 1) {
           emailError.textContent = "Por favor, insira um e-mail válido (ex: nome@dominio.com).";
           emailInput.classList.add("is-invalid");
           return false;

@@ -59,7 +59,7 @@ function glpichat_guest_session_ttl_config_seconds(): int
     return $ttl;
 }
 
-function glpichat_mark_invite_accepted(int $invite_id, int $participants_id): void
+function glpichat_mark_invite_accepted(int $invite_id, int $participants_id): bool
 {
     global $DB;
 
@@ -68,7 +68,10 @@ function glpichat_mark_invite_accepted(int $invite_id, int $participants_id): vo
         'participants_id' => $participants_id,
     ], [
         'id' => $invite_id,
+        'accepted_at' => null,
     ]);
+
+    return $DB->affectedRows() === 1;
 }
 
 function glpichat_guest_participant(string $session_token): array
@@ -138,7 +141,7 @@ function glpichat_guest_participant(string $session_token): array
             }
         }
 
-        throw new RuntimeException('Guest session has expired due to inactivity.');
+        throw new RuntimeException('Guest session is invalid.');
     }
 
     return $participant;
@@ -201,6 +204,27 @@ function glpichat_disconnect_participant(int $participants_id, string $now): voi
         } catch (\Exception $e) {
             // Silently ignore if configuration for followup user is missing
         }
+    }
+}
+
+function glpichat_assert_guest_not_throttled(int $participants_id, int $min_interval_seconds = 2): void
+{
+    global $DB;
+
+    $row = $DB->request([
+        'SELECT' => ['last_activity'],
+        'FROM'   => 'glpi_plugin_glpichat_participants',
+        'WHERE'  => ['id' => $participants_id],
+        'LIMIT'  => 1,
+    ])->current();
+
+    if (!is_array($row) || $row['last_activity'] === null) {
+        return;
+    }
+
+    $elapsed = time() - strtotime((string) $row['last_activity']);
+    if ($elapsed < $min_interval_seconds) {
+        throw new RuntimeException('Too many requests.', 429);
     }
 }
 

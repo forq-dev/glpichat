@@ -286,6 +286,9 @@ function glpichat_reissue_invite_use_case(
     if (!empty($invite['accepted_at'])) {
         throw new RuntimeException('Accepted invite cannot be reissued.');
     }
+    if (!empty($invite['revoked_at'])) {
+        throw new RuntimeException('Revoked invite cannot be reissued.');
+    }
 
     $token = (string) $generate_token();
     $expires_at = date('Y-m-d H:i:s', time() + $invite_ttl_seconds);

@@ -105,11 +105,11 @@ try {
     glpichat_unit_fail('Should throw exception for expired session');
 } catch (RuntimeException $e) {
     glpichat_unit_assert_true(
-        str_contains($e->getMessage(), 'Guest session has expired due to inactivity.'),
-        'Throws invalid guest session exception on expired session'
+        str_contains($e->getMessage(), 'Guest session is invalid.'),
+        'Throws unified invalid session exception on expired session (G4)'
     );
     glpichat_unit_assert_true($mockDB->update_called, 'Updates participant table to set left_at and clear session token');
-    glpichat_unit_pass('Throws exception on expired session and terminates participant');
+    glpichat_unit_pass('Throws unified invalid session exception on expired session and terminates participant (G4)');
 }
 
 // 4. Test glpichat_disconnect_participant

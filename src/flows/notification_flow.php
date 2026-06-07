@@ -5,7 +5,7 @@ declare(strict_types=1);
 require_once dirname(__DIR__) . '/domain/domain.php';
 
 /**
- * @return array{sender_name:string,preview:string,unread_count:string,unread_badge:string}
+ * @return array{authorized:bool,sender_name:string,preview:string,unread_count:string,unread_badge:string}
  */
 function glpichat_notification_message_data(
     string $event,
@@ -17,20 +17,21 @@ function glpichat_notification_message_data(
     callable $unread_count_for_user_room,
     callable $display_unread_count
 ): array {
-    $fallback = [
-        'sender_name' => 'Sistema',
-        'preview' => 'Nova mensagem no chat',
+    $unauthorized_fallback = [
+        'authorized' => false,
+        'sender_name' => '',
+        'preview' => '',
         'unread_count' => '0',
         'unread_badge' => '',
     ];
 
     $room_type = glpichat_notification_room_type($event);
     if ($room_type === null) {
-        return $fallback;
+        return $unauthorized_fallback;
     }
 
     if (!$can_user_read_notification_room($users_id, $tickets_id, $room_type)) {
-        return $fallback;
+        return $unauthorized_fallback;
     }
 
     $rooms_id = (int) $room_id($tickets_id, $room_type);
@@ -39,8 +40,9 @@ function glpichat_notification_message_data(
     $display_unread = (int) $display_unread_count($raw_unread);
 
     return [
-        'sender_name' => (string) ($message['sender_name'] ?? $fallback['sender_name']),
-        'preview' => (string) ($message['preview'] ?? $fallback['preview']),
+        'authorized' => true,
+        'sender_name' => (string) ($message['sender_name'] ?? 'Sistema'),
+        'preview' => (string) ($message['preview'] ?? 'Nova mensagem no chat'),
         'unread_count' => (string) $display_unread,
         'unread_badge' => $display_unread > 0 ? sprintf('(%d)', $display_unread) : '',
     ];

@@ -10,7 +10,9 @@ __pycache__/
 *.swp
 *~
 .DS_Store
+/.claude/
 
+CLAUDE.md
 AGENTS.md
 main.md
 note.md
@@ -18,3 +20,5 @@ design_patterns_widget.md
 tab_*.png
 task_*.md
 test_glpi_chat.py
+.mcp.json
+.claude

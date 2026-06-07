@@ -33,6 +33,27 @@ try {
     glpichat_unit_pass('Send input rejects invalid ticket id with canonical message');
 }
 
+// Gap 2 — room_type whitelist: send
+foreach (['admin', 'guest', '', 'PUBLIC', 'INTERNAL'] as $bad_room_type) {
+    try {
+        glpichat_validate_send_message_input(10, $bad_room_type, 'x');
+        glpichat_unit_fail("Send input must reject room_type '{$bad_room_type}'");
+    } catch (RuntimeException $error) {
+        glpichat_unit_assert_true(
+            str_contains($error->getMessage(), 'Invalid message parameters.'),
+            "Send input rejects room_type '{$bad_room_type}' with canonical message"
+        );
+        glpichat_unit_pass("Send input rejects room_type '{$bad_room_type}' with canonical message");
+    }
+}
+
+glpichat_unit_assert_same(
+    'hello internal',
+    glpichat_validate_send_message_input(10, GLPICHAT_ROOM_INTERNAL, ' hello internal '),
+    'Send input accepts room_type internal'
+);
+glpichat_unit_pass('Send input accepts room_type internal');
+
 glpichat_unit_assert_same(
     'Attachment added from GLPI Chat: note.txt',
     glpichat_attachment_message_content('note.txt', 'GLPI Chat'),

@@ -162,7 +162,8 @@ final class WidgetController extends AbstractController
                 'events'   => $events,
             ]);
         } catch (RuntimeException $e) {
-            return new JsonResponse(['error' => $e->getMessage()], 400);
+            $status = $e->getCode() === 403 ? 403 : 400;
+            return new JsonResponse(['error' => $e->getMessage()], $status);
         }
     }
 
@@ -196,7 +197,8 @@ final class WidgetController extends AbstractController
                 '_glpi_csrf_token' => Session::getNewCSRFToken(),
             ]);
         } catch (RuntimeException $e) {
-            return new JsonResponse(['error' => $e->getMessage()], 400);
+            $status = $e->getCode() === 403 ? 403 : 400;
+            return new JsonResponse(['error' => $e->getMessage()], $status);
         }
     }
 
@@ -226,7 +228,8 @@ final class WidgetController extends AbstractController
                 '_glpi_csrf_token' => Session::getNewCSRFToken(),
             ]);
         } catch (RuntimeException $e) {
-            return new JsonResponse(['error' => $e->getMessage()], 400);
+            $status = $e->getCode() === 403 ? 403 : 400;
+            return new JsonResponse(['error' => $e->getMessage()], $status);
         }
     }
 }

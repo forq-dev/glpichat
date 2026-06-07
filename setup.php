@@ -17,14 +17,24 @@ function plugin_init_glpichat(): void
 {
     global $PLUGIN_HOOKS;
 
-    glpichat_ensure_runtime_schema();
-    $rights_model_changed = glpichat_ensure_profile_rights_model();
-    if (
-        $rights_model_changed
-        && Session::getLoginUserID() !== false
-        && isset($_SESSION['glpiactiveprofile']['id'])
-    ) {
-        Session::reloadCurrentProfile();
+    // Schema/rights mutations must only run in an admin or CLI/cron context.
+    // On any regular non-admin request, skip mutations silently; the next admin
+    // login will trigger them. This prevents privilege escalation where an
+    // unprivileged request could ALTER TABLE or rewrite profile rights.
+    $can_mutate = isCommandLine()
+        || Session::isCron()
+        || Session::haveRight('config', UPDATE);
+
+    if ($can_mutate) {
+        glpichat_ensure_runtime_schema();
+        $rights_model_changed = glpichat_ensure_profile_rights_model();
+        if (
+            $rights_model_changed
+            && Session::getLoginUserID() !== false
+            && isset($_SESSION['glpiactiveprofile']['id'])
+        ) {
+            Session::reloadCurrentProfile();
+        }
     }
 
     $PLUGIN_HOOKS['csrf_compliant']['glpichat'] = true;
@@ -41,6 +51,10 @@ function plugin_init_glpichat(): void
     $PLUGIN_HOOKS[Hooks::ITEM_UPDATE]['glpichat'] = [HookHandler::class, 'itemUpdate'];
     $PLUGIN_HOOKS[Hooks::ITEM_GET_EVENTS]['glpichat'] = [NotificationTargetTicket::class => [HookHandler::class, 'itemGetEvents']];
     $PLUGIN_HOOKS[Hooks::ITEM_GET_DATA]['glpichat'] = [NotificationTargetTicket::class => [HookHandler::class, 'itemGetDatas']];
+    // Block download of documents uploaded to the internal channel for users without
+    // plugin_glpichat_internal READ. CommonDBTM::can() fires this hook for every
+    // Document::can($id, READ) call — including those triggered by canViewFile().
+    $PLUGIN_HOOKS[Hooks::ITEM_CAN]['glpichat'] = [Document::class => [HookHandler::class, 'canDocument']];
 
     Plugin::registerClass(TicketTab::class, ['addtabon' => Ticket::class]);
     Plugin::registerClass(ProfileTab::class, ['addtabon' => Profile::class]);

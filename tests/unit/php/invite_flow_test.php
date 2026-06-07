@@ -29,6 +29,43 @@ try {
     glpichat_unit_pass('Invite input rejects invalid ticket id with canonical message');
 }
 
+// Gap 3 — InviteController validation: guest_name empty
+try {
+    glpichat_validate_invite_input(10, '', 'alice@example.test');
+    glpichat_unit_fail('Invite input must reject empty guest_name');
+} catch (RuntimeException $error) {
+    glpichat_unit_assert_true(
+        str_contains($error->getMessage(), 'Invalid invite parameters.'),
+        'Invite input rejects empty guest_name with canonical message'
+    );
+    glpichat_unit_pass('Invite input rejects empty guest_name with canonical message');
+}
+
+// Gap 3 — InviteController validation: guest_name whitespace-only
+try {
+    glpichat_validate_invite_input(10, '   ', 'alice@example.test');
+    glpichat_unit_fail('Invite input must reject whitespace-only guest_name');
+} catch (RuntimeException $error) {
+    glpichat_unit_assert_true(
+        str_contains($error->getMessage(), 'Invalid invite parameters.'),
+        'Invite input rejects whitespace-only guest_name with canonical message'
+    );
+    glpichat_unit_pass('Invite input rejects whitespace-only guest_name with canonical message');
+}
+
+// Gap 3 — InviteController validation: guest_name longer than 255 chars is truncated
+$long_name = str_repeat('A', 300);
+// mb_substr(trim($long_name), 0, 255) truncates to 255 — validate_invite_input only trims
+// The truncation lives in the controller; the flow function just trims. Verify trimming:
+$result_long = glpichat_validate_invite_input(10, $long_name, '');
+glpichat_unit_assert_same(300, mb_strlen($result_long['guest_name']), 'Invite flow preserves full name length for layer above to truncate');
+glpichat_unit_pass('Invite flow preserves full name length for layer above to truncate');
+
+// Gap 3 — InviteController validation: empty email is accepted (optional field)
+$validated_no_email = glpichat_validate_invite_input(10, 'Bob', '');
+glpichat_unit_assert_same('', $validated_no_email['guest_email'], 'Invite input accepts empty guest_email');
+glpichat_unit_pass('Invite input accepts empty guest_email');
+
 glpichat_unit_assert_same(
     'https://glpi.example/plugins/glpichat/Accept/token123',
     glpichat_invite_url('https://glpi.example/', 'token123'),

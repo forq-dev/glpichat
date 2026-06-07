@@ -244,8 +244,8 @@ describe('DOM Module', () => {
       
       expect(safeBottom).toBeDefined();
       expect(safeTop).toBeDefined();
-      expect(safeBottom).toMatch(/\d+px/);
-      expect(safeTop).toMatch(/\d+px/);
+      expect(safeBottom).toMatch(/^\d+px$/);
+      expect(safeTop).toMatch(/^\d+px$/);
     });
 
     it('should include SAFE_BOTTOM_MARGIN_PX (8px) in calculation', () => {

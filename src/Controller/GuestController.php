@@ -6,6 +6,7 @@ namespace GlpiPlugin\Glpichat\Controller;
 
 use Glpi\Controller\AbstractController;
 use Glpi\Http\Firewall;
+use Glpi\Http\RedirectResponse;
 use Glpi\Security\Attribute\SecurityStrategy;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\Cookie;
@@ -49,13 +50,36 @@ final class GuestController extends AbstractController
                 'glpichat_add_followup',
                 'glpichat_raise_guest_joined_notification_event'
             );
-            $response = new Response($this->guestHtml((int) $accepted['tickets_id'], (int) $accepted['rooms_id'], (string) $accepted['guest_name']));
-            $response->headers->setCookie(
+            global $CFG_GLPI;
+            $url_base = rtrim((string) ($CFG_GLPI['url_base'] ?? ''), '/');
+            $redirect = new RedirectResponse($url_base . '/plugins/glpichat/Guest');
+            $redirect->headers->setCookie(
                 Cookie::create(GLPICHAT_GUEST_COOKIE, $accepted['session_token'])
                     ->withHttpOnly(true)
                     ->withSameSite('Strict')
                     ->withSecure($request->isSecure())
             );
+            return $redirect;
+        } catch (RuntimeException $e) {
+            return new Response(htmlescape($e->getMessage()), 400);
+        }
+    }
+
+    #[Route('/Guest', name: 'glpichat_guest_page', methods: ['GET'])]
+    #[SecurityStrategy(Firewall::STRATEGY_NO_CHECK)]
+    public function page(Request $request): Response
+    {
+        $session_token = $request->cookies->get(GLPICHAT_GUEST_COOKIE, '');
+        if ($session_token === '') {
+            return new Response(htmlescape('Invalid or missing guest session.'), 400);
+        }
+        try {
+            $participant = glpichat_guest_participant($session_token);
+            $room = glpichat_room_by_id((int) $participant['rooms_id']);
+            $response = new Response($this->guestHtml((int) $room['tickets_id'], (int) $participant['rooms_id'], (string) $participant['guest_name']));
+            $response->headers->set('X-Frame-Options', 'DENY');
+            $response->headers->set('Content-Security-Policy', "default-src 'self'; style-src 'self'; script-src 'self'");
+            $response->headers->set('Referrer-Policy', 'no-referrer');
             return $response;
         } catch (RuntimeException $e) {
             return new Response(htmlescape($e->getMessage()), 400);
@@ -129,7 +153,8 @@ final class GuestController extends AbstractController
 
             return new JsonResponse(['message_id' => $message_id]);
         } catch (\Throwable $e) {
-            return new JsonResponse(['error' => $e->getMessage()], 400);
+            $status = $e->getCode() === 429 ? 429 : 400;
+            return new JsonResponse(['error' => $e->getMessage()], $status);
         }
     }
 
@@ -152,7 +177,8 @@ final class GuestController extends AbstractController
 
             return new JsonResponse($result);
         } catch (\Throwable $e) {
-            return new JsonResponse(['error' => $e->getMessage()], 400);
+            $status = $e->getCode() === 429 ? 429 : 400;
+            return new JsonResponse(['error' => $e->getMessage()], $status);
         }
     }
 

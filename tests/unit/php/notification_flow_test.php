@@ -34,6 +34,7 @@ $public_message = glpichat_notification_message_data(
 
 glpichat_unit_assert_same_array(
     [
+        'authorized' => true,
         'sender_name' => 'Tecnico #7',
         'preview' => 'Mensagem publica',
         'unread_count' => '3',
@@ -65,15 +66,16 @@ $internal_hidden = glpichat_notification_message_data(
 
 glpichat_unit_assert_same_array(
     [
-        'sender_name' => 'Sistema',
-        'preview' => 'Nova mensagem no chat',
+        'authorized' => false,
+        'sender_name' => '',
+        'preview' => '',
         'unread_count' => '0',
         'unread_badge' => '',
     ],
     $internal_hidden,
-    'Notification helper returns neutral content for unauthorized internal event recipients'
+    'Notification helper returns empty content for unauthorized internal event recipients'
 );
-glpichat_unit_pass('Notification helper returns neutral content for unauthorized internal event recipients');
+glpichat_unit_pass('Notification helper returns empty content for unauthorized internal event recipients');
 
 glpichat_unit_assert_same(
     GLPICHAT_ROOM_PUBLIC,

@@ -32,8 +32,16 @@ final class InviteController extends AbstractController
             glpichat_require_logged_csrf($input);
 
             $tickets_id = $request->request->getInt('tickets_id');
-            $guest_name = $request->request->getString('guest_name');
-            $guest_email = $request->request->getString('guest_email');
+            $guest_name = mb_substr(trim((string) $request->request->getString('guest_name')), 0, 255);
+            $guest_email = trim((string) $request->request->getString('guest_email'));
+
+            if ($guest_name === '') {
+                throw new RuntimeException('Guest name is required.');
+            }
+
+            if ($guest_email !== '' && !filter_var($guest_email, FILTER_VALIDATE_EMAIL)) {
+                throw new RuntimeException('Invalid guest email format.');
+            }
 
             $invite = glpichat_create_invite_use_case(
                 $tickets_id,

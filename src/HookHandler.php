@@ -11,6 +11,7 @@ use Document_Item;
 use Dropdown;
 use ITILFollowup;
 use NotificationTargetTicket;
+use Session;
 use Ticket;
 
 use function glpichat_add_message;
@@ -124,11 +125,12 @@ final class HookHandler
         );
 
         $room_type = (string) ($target->options['glpichat_room_type'] ?? '');
-        $target->data['##glpichat.event_action##'] = $event_action_map[$event];
+        $is_authorized = (bool) ($message_data['authorized'] ?? false);
+        $target->data['##glpichat.event_action##'] = $is_authorized ? ($event_action_map[$event] ?? '') : '';
         $target->data['##glpichat.sender_name##'] = $message_data['sender_name'];
         $target->data['##glpichat.guest_name##'] = '';
         $target->data['##glpichat.message_preview##'] = $message_data['preview'];
-        $target->data['##glpichat.channel_type##'] = $channel_type_map[$room_type] ?? '';
+        $target->data['##glpichat.channel_type##'] = $is_authorized ? ($channel_type_map[$room_type] ?? '') : '';
         $target->data['##glpichat.unread_count##'] = $message_data['unread_count'];
         $target->data['##glpichat.unread_badge##'] = $message_data['unread_badge'];
     }
@@ -428,6 +430,70 @@ final class HookHandler
         $name = getUserName($users_id);
 
         return is_string($name) && $name !== '' ? $name : ('Usuario #' . $users_id);
+    }
+
+    /**
+     * Hook: Hooks::ITEM_CAN — intercepts Document::can() to enforce
+     * plugin_glpichat_internal READ for documents uploaded to the internal channel.
+     *
+     * Called by CommonDBTM::can() via Plugin::doHook(Hooks::ITEM_CAN, $document).
+     * If $item->right is changed to any value != the original right, can() returns false.
+     *
+     * Only blocks access when ALL three conditions are true:
+     *  1. The item is a Document instance with a valid ID.
+     *  2. The document is referenced in glpi_plugin_glpichat_messages with a room whose
+     *     room_type = 'internal'.
+     *  3. The current user does NOT have plugin_glpichat_internal READ.
+     *
+     * Documents not linked to the internal channel are left untouched.
+     *
+     * @param Document $item The Document being checked (passed by reference via doHook).
+     */
+    public static function canDocument(Document $item): void
+    {
+        global $DB;
+
+        $documents_id = (int) ($item->fields['id'] ?? 0);
+        if ($documents_id <= 0) {
+            return;
+        }
+
+        // Skip if the right being checked is not READ — do not interfere with
+        // UPDATE / DELETE / PURGE checks triggered by other workflows.
+        if ((int) $item->right !== READ) {
+            return;
+        }
+
+        // Check whether this document belongs to an internal-channel message.
+        // A single row is enough; LIMIT 1 makes the query cheap.
+        $iterator = $DB->request([
+            'SELECT' => ['glpi_plugin_glpichat_rooms.room_type'],
+            'FROM'   => 'glpi_plugin_glpichat_messages',
+            'LEFT JOIN' => [
+                'glpi_plugin_glpichat_rooms' => [
+                    'ON' => [
+                        'glpi_plugin_glpichat_messages' => 'rooms_id',
+                        'glpi_plugin_glpichat_rooms'    => 'id',
+                    ],
+                ],
+            ],
+            'WHERE'  => [
+                'glpi_plugin_glpichat_messages.documents_id' => $documents_id,
+                'glpi_plugin_glpichat_rooms.room_type'       => GLPICHAT_ROOM_INTERNAL,
+            ],
+            'LIMIT'  => 1,
+        ]);
+
+        if (count($iterator) === 0) {
+            // Document is not linked to the internal channel — do not restrict.
+            return;
+        }
+
+        // Document belongs to the internal channel: require plugin_glpichat_internal READ.
+        if (!Session::haveRight('plugin_glpichat_internal', READ)) {
+            // Setting right to null (≠ original value) causes CommonDBTM::can() to return false.
+            $item->right = null;
+        }
     }
 
     private static function ticketCategoryLabel(int $itilcategories_id): string

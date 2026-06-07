@@ -47,7 +47,7 @@ function glpichat_guest_ticket_id_from_room(array $room): int
  */
 function glpichat_assert_valid_accept_invite_result(?array $invite): array
 {
-    if (!is_array($invite)) {
+    if (!is_array($invite) || $invite === []) {
         throw new RuntimeException('Invite is invalid, expired, accepted, or revoked.');
     }
 
@@ -103,7 +103,10 @@ function glpichat_accept_invite_use_case(
         (string) ($invite['guest_email'] ?? ''),
         glpichat_guest_session_hash($session_token)
     );
-    $mark_invite_accepted((int) $invite['id'], $participants_id);
+    $accepted = $mark_invite_accepted((int) $invite['id'], $participants_id);
+    if ($accepted === false) {
+        throw new RuntimeException('Invite is invalid, expired, accepted, or revoked.');
+    }
     $record_event(
         (int) $invite['rooms_id'],
         (int) $invite['tickets_id'],
@@ -224,6 +227,7 @@ function glpichat_guest_send_message_use_case(
     callable $add_message
 ): int {
     $participant = $guest_participant($session_token);
+    glpichat_assert_guest_not_throttled((int) ($participant['id'] ?? 0));
     $rooms_id = (int) ($participant['rooms_id'] ?? 0);
     $room = $room_by_id($rooms_id);
     $tickets_id = glpichat_guest_ticket_id_from_room($room);
@@ -260,6 +264,7 @@ function glpichat_guest_upload_message_use_case(
 ): array {
     $validated_file = glpichat_validate_upload_input(1, GLPICHAT_ROOM_PUBLIC, $file);
     $participant = $guest_participant($session_token);
+    glpichat_assert_guest_not_throttled((int) ($participant['id'] ?? 0));
     $rooms_id = (int) ($participant['rooms_id'] ?? 0);
     $room = $room_by_id($rooms_id);
     $tickets_id = glpichat_guest_ticket_id_from_room($room);

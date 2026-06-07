@@ -17,12 +17,15 @@ use Symfony\Component\Routing\Attribute\Route;
 
 use function glpichat_accept_invite;
 use function glpichat_accept_invite_use_case;
+use function glpichat_assert_accept_not_rate_limited;
 use function glpichat_events;
 use function glpichat_guest_leave_use_case;
 use function glpichat_guest_send_message_use_case;
 use function glpichat_guest_participant;
+use function glpichat_guest_session_ttl_config_seconds;
 use function glpichat_guest_sync_use_case;
 use function glpichat_guest_upload_message_use_case;
+use function glpichat_log_auth_failure;
 use function glpichat_messages;
 use function glpichat_room_by_id;
 use function glpichat_ticket_status;
@@ -39,6 +42,7 @@ final class GuestController extends AbstractController
     public function accept(Request $request, string $token): Response
     {
         try {
+            glpichat_assert_accept_not_rate_limited($request->getClientIp() ?? '');
             $accepted = glpichat_accept_invite_use_case(
                 $token,
                 static fn(string $token_hash): array => glpichat_accept_invite_lookup($token_hash),
@@ -58,10 +62,15 @@ final class GuestController extends AbstractController
                     ->withHttpOnly(true)
                     ->withSameSite('Strict')
                     ->withSecure($request->isSecure())
+                    ->withExpires(new \DateTimeImmutable('+' . glpichat_guest_session_ttl_config_seconds() . ' seconds'))
             );
             return $redirect;
         } catch (RuntimeException $e) {
-            return new Response(htmlescape($e->getMessage()), 400);
+            if ($e->getCode() !== 429) {
+                glpichat_log_auth_failure('guest_accept_failed', $e->getMessage(), $request->getClientIp() ?? '');
+            }
+            $status = $e->getCode() === 429 ? 429 : 400;
+            return new Response(htmlescape($e->getMessage()), $status);
         }
     }
 
@@ -108,6 +117,7 @@ final class GuestController extends AbstractController
 
             return new JsonResponse($result);
         } catch (\Throwable $e) {
+            glpichat_log_auth_failure('guest_sync_failed', $e->getMessage(), $request->getClientIp() ?? '');
             return new JsonResponse(['error' => $e->getMessage()], 400);
         }
     }
@@ -153,6 +163,9 @@ final class GuestController extends AbstractController
 
             return new JsonResponse(['message_id' => $message_id]);
         } catch (\Throwable $e) {
+            if ($e->getCode() !== 429) {
+                glpichat_log_auth_failure('guest_send_failed', $e->getMessage(), $request->getClientIp() ?? '');
+            }
             $status = $e->getCode() === 429 ? 429 : 400;
             return new JsonResponse(['error' => $e->getMessage()], $status);
         }
@@ -177,6 +190,9 @@ final class GuestController extends AbstractController
 
             return new JsonResponse($result);
         } catch (\Throwable $e) {
+            if ($e->getCode() !== 429) {
+                glpichat_log_auth_failure('guest_upload_failed', $e->getMessage(), $request->getClientIp() ?? '');
+            }
             $status = $e->getCode() === 429 ? 429 : 400;
             return new JsonResponse(['error' => $e->getMessage()], $status);
         }

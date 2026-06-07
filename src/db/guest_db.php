@@ -212,17 +212,17 @@ function glpichat_assert_guest_not_throttled(int $participants_id, int $min_inte
     global $DB;
 
     $row = $DB->request([
-        'SELECT' => ['last_activity'],
+        'SELECT' => ['last_send_at'],
         'FROM'   => 'glpi_plugin_glpichat_participants',
         'WHERE'  => ['id' => $participants_id],
         'LIMIT'  => 1,
     ])->current();
 
-    if (!is_array($row) || $row['last_activity'] === null) {
+    if (!is_array($row) || $row['last_send_at'] === null) {
         return;
     }
 
-    $elapsed = time() - strtotime((string) $row['last_activity']);
+    $elapsed = time() - strtotime((string) $row['last_send_at']);
     if ($elapsed < $min_interval_seconds) {
         throw new RuntimeException('Too many requests.', 429);
     }
@@ -273,4 +273,58 @@ function glpichat_get_typing_participants(int $rooms_id, int $exclude_participan
     }
 
     return $names;
+}
+
+function glpichat_update_participant_last_send(int $participants_id): void
+{
+    global $DB;
+    $DB->update('glpi_plugin_glpichat_participants', [
+        'last_send_at' => date('Y-m-d H:i:s'),
+    ], [
+        'id' => $participants_id,
+    ]);
+}
+
+function glpichat_log_auth_failure(string $action, string $detail, string $ip): void
+{
+    global $DB;
+    if (!isset($DB) || !$DB->tableExists('glpi_plugin_glpichat_auditlogs')) {
+        return;
+    }
+    $DB->insert('glpi_plugin_glpichat_auditlogs', [
+        'rooms_id'        => 0,
+        'tickets_id'      => 0,
+        'action'          => mb_substr($action, 0, 60),
+        'actor_type'      => 'unknown',
+        'users_id'        => 0,
+        'participants_id' => 0,
+        'payload_json'    => json_encode(['detail' => $detail, 'ip_hash' => hash('sha256', $ip)]),
+        'date_creation'   => date('Y-m-d H:i:s'),
+    ]);
+}
+
+function glpichat_assert_accept_not_rate_limited(string $ip): void
+{
+    global $DB;
+    if ($ip === '') {
+        return;
+    }
+    $since    = date('Y-m-d H:i:s', time() - 60);
+    $ip_hash  = hash('sha256', $ip);
+    $count    = 0;
+    if (isset($DB) && $DB->tableExists('glpi_plugin_glpichat_auditlogs')) {
+        $row = $DB->request([
+            'COUNT' => 'id',
+            'FROM'  => 'glpi_plugin_glpichat_auditlogs',
+            'WHERE' => [
+                'action'         => 'guest_accept_failed',
+                ['date_creation' => ['>', $since]],
+                ['payload_json'  => ['LIKE', '%' . $ip_hash . '%']],
+            ],
+        ])->current();
+        $count = (int) ($row['COUNT'] ?? 0);
+    }
+    if ($count >= 10) {
+        throw new RuntimeException('Too many attempts. Try again later.', 429);
+    }
 }

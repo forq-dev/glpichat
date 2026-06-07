@@ -332,6 +332,7 @@ function glpichat_schema_queries(): array
             `last_activity` TIMESTAMP NULL DEFAULT NULL,
             `last_seen` TIMESTAMP NULL DEFAULT NULL,
             `is_typing_until` TIMESTAMP NULL DEFAULT NULL,
+            `last_send_at` TIMESTAMP NULL DEFAULT NULL,
             PRIMARY KEY (`id`)
         ) $options",
         'glpi_plugin_glpichat_messages' => "CREATE TABLE `glpi_plugin_glpichat_messages` (
@@ -439,6 +440,9 @@ function glpichat_ensure_runtime_schema(): void
     }
     if (!$DB->fieldExists($participants_table, 'is_typing_until')) {
         $missing_columns[] = 'ADD COLUMN `is_typing_until` TIMESTAMP NULL DEFAULT NULL';
+    }
+    if (!$DB->fieldExists($participants_table, 'last_send_at')) {
+        $missing_columns[] = 'ADD COLUMN `last_send_at` TIMESTAMP NULL DEFAULT NULL';
     }
 
     if ($missing_columns === []) {

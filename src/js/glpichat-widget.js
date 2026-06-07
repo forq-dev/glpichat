@@ -1591,8 +1591,8 @@ import {
         panel.hidden = !isOpen;
       }
 
-      const label = `Chamado #${ticketId}`;
-      tab.innerHTML = `<span>${label}</span>${ticket.unreadTotal > 0 ? `<em>${ticket.unreadTotal}</em>` : ""}`;
+      const label = `Chamado #${sanitize(ticketId)}`;
+      tab.innerHTML = `<span>${label}</span>${ticket.unreadTotal > 0 ? `<em>${sanitize(ticket.unreadTotal)}</em>` : ""}`;
       if (isOpen) {
         renderTicketTabs(ticketId);
       }
@@ -1647,17 +1647,17 @@ import {
       const badges = [];
       if (ticket.channels.public) {
         const publicUnread = Number(state.channels.get(ticket.channels.public)?.unread_count || 0);
-        badges.push(`<i class="glpichat-notification-badge glpichat-notification-badge-public" title="Solicitante">${publicUnread}</i>`);
+        badges.push(`<i class="glpichat-notification-badge glpichat-notification-badge-public" title="Solicitante">${sanitize(publicUnread)}</i>`);
       }
       if (ticket.channels.internal) {
         const internalUnread = Number(state.channels.get(ticket.channels.internal)?.unread_count || 0);
-        badges.push(`<i class="glpichat-notification-badge glpichat-notification-badge-internal" title="Discussão técnica">${internalUnread}</i>`);
+        badges.push(`<i class="glpichat-notification-badge glpichat-notification-badge-internal" title="Discussão técnica">${sanitize(internalUnread)}</i>`);
       }
       const badgesHtml = badges.length > 0
         ? `<span class="glpichat-notification-badges">${badges.join("")}</span>`
         : "";
-      return `<button type="button" class="glpichat-ticket-filter-item" data-ticket-id="${ticket.id}">
-        <span class="glpichat-notification-label">Chamado #${ticket.id} <small>${statusLabel(statusKeyFromCode(ticket.status))}</small></span>
+      return `<button type="button" class="glpichat-ticket-filter-item" data-ticket-id="${sanitize(ticket.id)}">
+        <span class="glpichat-notification-label">Chamado #${sanitize(ticket.id)} <small>${statusLabel(statusKeyFromCode(ticket.status))}</small></span>
         ${badgesHtml}
       </button>`;
     }).join("");

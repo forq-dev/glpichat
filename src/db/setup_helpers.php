@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 use Glpi\DBAL\QueryExpression;
 
-const GLPICHAT_RIGHTS_MODEL_VERSION = '6';
+const GLPICHAT_RIGHTS_MODEL_VERSION = '7';
 
 function glpichat_add_profile_rights(): void
 {

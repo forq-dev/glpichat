@@ -236,7 +236,7 @@ function glpichat_guest_send_message_use_case(
     $followup_user_id = (int) $external_followup_user_id();
     $followups_id = (int) $add_followup($tickets_id, $followup_user_id, $validated_content, false);
 
-    return (int) $add_message(
+    $message_id = (int) $add_message(
         $tickets_id,
         GLPICHAT_ROOM_PUBLIC,
         GLPICHAT_ACTOR_GUEST,
@@ -246,6 +246,9 @@ function glpichat_guest_send_message_use_case(
         0,
         $followups_id
     );
+    glpichat_update_participant_last_send((int) ($participant['id'] ?? 0));
+
+    return $message_id;
 }
 
 /**
@@ -283,6 +286,7 @@ function glpichat_guest_upload_message_use_case(
         $documents_id,
         $followups_id
     );
+    glpichat_update_participant_last_send((int) ($participant['id'] ?? 0));
 
     return [
         'message_id' => $message_id,

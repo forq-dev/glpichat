@@ -91,6 +91,28 @@ try {
     glpichat_unit_pass('Invite guard rejects missing invite with canonical message');
 }
 
+// B-9E — empty array must be rejected with the same canonical message (lookup returned [])
+try {
+    glpichat_assert_invite_found([]);
+    glpichat_unit_fail('Invite guard must reject empty array invite');
+} catch (RuntimeException $error) {
+    glpichat_unit_assert_true(
+        str_contains($error->getMessage(), 'Invite not found.'),
+        'Invite guard rejects empty array invite with canonical message'
+    );
+    glpichat_unit_pass('Invite guard rejects empty array invite with canonical message');
+}
+
+// B-9E — non-empty array must be returned as-is (happy path)
+$valid_manage_invite = ['id' => 99, 'rooms_id' => 10, 'tickets_id' => 20, 'guest_name' => 'Test'];
+$found_result = glpichat_assert_invite_found($valid_manage_invite);
+glpichat_unit_assert_same_array(
+    $valid_manage_invite,
+    $found_result,
+    'Invite guard returns valid invite array unchanged'
+);
+glpichat_unit_pass('Invite guard returns valid invite array unchanged');
+
 $list_calls = [];
 $listed = glpichat_list_invites_use_case(
     40,

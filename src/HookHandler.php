@@ -10,7 +10,9 @@ use Document;
 use Document_Item;
 use Dropdown;
 use ITILFollowup;
+use NotificationTarget;
 use NotificationTargetTicket;
+use Profile;
 use Session;
 use Ticket;
 
@@ -133,6 +135,63 @@ final class HookHandler
         $target->data['##glpichat.channel_type##'] = $is_authorized ? ($channel_type_map[$room_type] ?? '') : '';
         $target->data['##glpichat.unread_count##'] = $message_data['unread_count'];
         $target->data['##glpichat.unread_badge##'] = $message_data['unread_badge'];
+    }
+
+    /**
+     * Hook: Hooks::ADD_RECIPIENT_TO_TARGET — removes users without
+     * plugin_glpichat_internal READ from the recipient list for the
+     * glpichat_internal_message notification event.
+     *
+     * Called by NotificationTarget::addToRecipientsList() after each recipient
+     * is added to $target->target. $target->recipient_data contains the user
+     * that was just added. If the user lacks the internal-channel right, every
+     * entry in $target->target keyed by that user's ID is unset, so no email is
+     * ever queued for that recipient — instead of queuing an empty email.
+     *
+     * @param NotificationTarget $target NotificationTarget passed by reference via doHook.
+     */
+    public static function filterInternalMessageTargets(NotificationTarget $target): void
+    {
+        // Only act on the internal-message event.
+        $event = (string) ($target->raiseevent ?? '');
+        if ($event !== 'glpichat_internal_message') {
+            return;
+        }
+
+        // Only act when a concrete user is being added (not a group/profile batch).
+        $recipient = $target->recipient_data;
+        if (($recipient['itemtype'] ?? '') !== \User::class) {
+            return;
+        }
+
+        $users_id = (int) ($recipient['items_id'] ?? 0);
+        if ($users_id <= 0) {
+            return;
+        }
+
+        // Check whether this user holds plugin_glpichat_internal READ in at least
+        // one profile that covers the ticket's entity (or any parent entity).
+        // We use Profile::haveUserRight() which queries the DB directly, so this
+        // is safe to call outside the recipient's own session.
+        $entity_id = (int) $target->getEntity();
+        $has_right = Profile::haveUserRight(
+            $users_id,
+            'plugin_glpichat_internal',
+            READ,
+            $entity_id
+        );
+
+        if ($has_right) {
+            return;
+        }
+
+        // Remove every entry in $target->target that belongs to this user.
+        // Entries are keyed by email address; each value has a 'users_id' sub-key.
+        foreach (array_keys($target->target) as $key) {
+            if (isset($target->target[$key]['users_id']) && (int) $target->target[$key]['users_id'] === $users_id) {
+                unset($target->target[$key]);
+            }
+        }
     }
 
     public static function preItemUpdate(CommonDBTM $item): void

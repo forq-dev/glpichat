@@ -51,6 +51,10 @@ function plugin_init_glpichat(): void
     $PLUGIN_HOOKS[Hooks::ITEM_UPDATE]['glpichat'] = [HookHandler::class, 'itemUpdate'];
     $PLUGIN_HOOKS[Hooks::ITEM_GET_EVENTS]['glpichat'] = [NotificationTargetTicket::class => [HookHandler::class, 'itemGetEvents']];
     $PLUGIN_HOOKS[Hooks::ITEM_GET_DATA]['glpichat'] = [NotificationTargetTicket::class => [HookHandler::class, 'itemGetDatas']];
+    // Filter recipients for glpichat_internal_message: users without plugin_glpichat_internal READ
+    // are removed from the target list before any email is queued, so they never receive even
+    // an empty notification revealing the existence of the internal-channel event.
+    $PLUGIN_HOOKS[Hooks::ADD_RECIPIENT_TO_TARGET]['glpichat'] = [NotificationTargetTicket::class => [HookHandler::class, 'filterInternalMessageTargets']];
     // Block download of documents uploaded to the internal channel for users without
     // plugin_glpichat_internal READ. CommonDBTM::can() fires this hook for every
     // Document::can($id, READ) call — including those triggered by canViewFile().

@@ -123,7 +123,7 @@ function glpichat_invite_management_status(string $invite_status, string $sessio
  */
 function glpichat_assert_invite_found(?array $invite): array
 {
-    if (!is_array($invite)) {
+    if (!is_array($invite) || $invite === []) {
         throw new RuntimeException('Invite not found.');
     }
 

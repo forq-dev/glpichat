@@ -6,8 +6,8 @@ require dirname(__DIR__, 2) . '/bootstrap/unit.php';
 require_once dirname(__DIR__, 3) . '/src/db/guest_db.php';
 
 /**
- * Minimal mock for the GLPI $DB global used by glpichat_assert_guest_not_throttled.
- * Simulates DB->request()->current() returning a single participant row.
+ * Minimal mock for the GLPI $DB global.
+ * Simulates DB->request()->current() returning rows from a queue.
  */
 final class ThrottleMockIterator implements Iterator
 {
@@ -45,27 +45,44 @@ final class ThrottleMockIterator implements Iterator
 
 final class ThrottleMockDB
 {
-    public function __construct(private readonly ?array $participant_row)
+    /** @var list<array<string,mixed>|null> */
+    private array $query_results;
+
+    /**
+     * @param list<array<string,mixed>|null> $query_results
+     *   Rows returned in FIFO order for successive request() calls.
+     *   Pass null as an element to simulate "row not found".
+     */
+    public function __construct(array $query_results)
     {
+        $this->query_results = $query_results;
     }
 
     public function request(array $params): ThrottleMockIterator
     {
-        return new ThrottleMockIterator($this->participant_row);
+        $row = array_shift($this->query_results);
+        return new ThrottleMockIterator($row ?? null);
+    }
+
+    public function tableExists(string $table): bool
+    {
+        return true;
     }
 }
 
-// Gap 4 — last_activity null: no throttle (fresh participant, never sent)
-$GLOBALS['DB'] = new ThrottleMockDB(['last_activity' => null]);
+// ── glpichat_assert_guest_not_throttled ─────────────────────────────────────
+
+// B-9D — last_send_at null: no throttle (fresh participant, never sent)
+$GLOBALS['DB'] = new ThrottleMockDB([['last_send_at' => null]]);
 try {
     glpichat_assert_guest_not_throttled(1);
-    glpichat_unit_pass('Throttle allows request when last_activity is null');
+    glpichat_unit_pass('Throttle allows request when last_send_at is null');
 } catch (RuntimeException $error) {
-    glpichat_unit_fail('Throttle must not block when last_activity is null');
+    glpichat_unit_fail('Throttle must not block when last_send_at is null');
 }
 
-// Gap 4 — row not found: no throttle
-$GLOBALS['DB'] = new ThrottleMockDB(null);
+// B-9D — row not found: no throttle
+$GLOBALS['DB'] = new ThrottleMockDB([null]);
 try {
     glpichat_assert_guest_not_throttled(1);
     glpichat_unit_pass('Throttle allows request when participant row is not found');
@@ -73,41 +90,41 @@ try {
     glpichat_unit_fail('Throttle must not block when participant row is not found');
 }
 
-// Gap 4 — last_activity 3 seconds ago: no throttle (above 2s interval)
-$GLOBALS['DB'] = new ThrottleMockDB(['last_activity' => date('Y-m-d H:i:s', time() - 3)]);
+// B-9D — last_send_at 3 seconds ago: no throttle (above 2s interval)
+$GLOBALS['DB'] = new ThrottleMockDB([['last_send_at' => date('Y-m-d H:i:s', time() - 3)]]);
 try {
     glpichat_assert_guest_not_throttled(1);
-    glpichat_unit_pass('Throttle allows request when last_activity is 3 seconds ago');
+    glpichat_unit_pass('Throttle allows request when last_send_at is 3 seconds ago');
 } catch (RuntimeException $error) {
-    glpichat_unit_fail('Throttle must not block when last_activity is 3 seconds ago');
+    glpichat_unit_fail('Throttle must not block when last_send_at is 3 seconds ago');
 }
 
-// Gap 4 — last_activity 1 second ago: throttled (below 2s interval)
-$GLOBALS['DB'] = new ThrottleMockDB(['last_activity' => date('Y-m-d H:i:s', time() - 1)]);
+// B-9D — last_send_at 1 second ago: throttled (below 2s interval)
+$GLOBALS['DB'] = new ThrottleMockDB([['last_send_at' => date('Y-m-d H:i:s', time() - 1)]]);
 try {
     glpichat_assert_guest_not_throttled(1);
-    glpichat_unit_fail('Throttle must block when last_activity is only 1 second ago');
+    glpichat_unit_fail('Throttle must block when last_send_at is only 1 second ago');
 } catch (RuntimeException $error) {
     glpichat_unit_assert_same(429, $error->getCode(), 'Throttle throws with code 429');
     glpichat_unit_assert_true(
         str_contains($error->getMessage(), 'Too many requests.'),
-        'Throttle rejects recent activity with canonical message'
+        'Throttle rejects recent send with canonical message'
     );
-    glpichat_unit_pass('Throttle rejects request when last_activity is 1 second ago with code 429');
+    glpichat_unit_pass('Throttle rejects request when last_send_at is 1 second ago with code 429');
 }
 
-// Gap 4 — last_activity exactly now (0 seconds ago): throttled
-$GLOBALS['DB'] = new ThrottleMockDB(['last_activity' => date('Y-m-d H:i:s', time())]);
+// B-9D — last_send_at exactly now (0 seconds ago): throttled
+$GLOBALS['DB'] = new ThrottleMockDB([['last_send_at' => date('Y-m-d H:i:s', time())]]);
 try {
     glpichat_assert_guest_not_throttled(1);
-    glpichat_unit_fail('Throttle must block when last_activity is right now');
+    glpichat_unit_fail('Throttle must block when last_send_at is right now');
 } catch (RuntimeException $error) {
-    glpichat_unit_assert_same(429, $error->getCode(), 'Throttle throws 429 when last_activity is right now');
-    glpichat_unit_pass('Throttle rejects request when last_activity is right now with code 429');
+    glpichat_unit_assert_same(429, $error->getCode(), 'Throttle throws 429 when last_send_at is right now');
+    glpichat_unit_pass('Throttle rejects request when last_send_at is right now with code 429');
 }
 
-// Gap 4 — custom min_interval_seconds: last_activity 4 seconds ago with interval=5 → throttled
-$GLOBALS['DB'] = new ThrottleMockDB(['last_activity' => date('Y-m-d H:i:s', time() - 4)]);
+// B-9D — custom min_interval_seconds: last_send_at 4 seconds ago with interval=5 → throttled
+$GLOBALS['DB'] = new ThrottleMockDB([['last_send_at' => date('Y-m-d H:i:s', time() - 4)]]);
 try {
     glpichat_assert_guest_not_throttled(1, 5);
     glpichat_unit_fail('Throttle must block when 4s elapsed with 5s interval');
@@ -116,13 +133,75 @@ try {
     glpichat_unit_pass('Throttle respects custom min_interval_seconds parameter');
 }
 
-// Gap 4 — custom min_interval_seconds: last_activity 6 seconds ago with interval=5 → allowed
-$GLOBALS['DB'] = new ThrottleMockDB(['last_activity' => date('Y-m-d H:i:s', time() - 6)]);
+// B-9D — custom min_interval_seconds: last_send_at 6 seconds ago with interval=5 → allowed
+$GLOBALS['DB'] = new ThrottleMockDB([['last_send_at' => date('Y-m-d H:i:s', time() - 6)]]);
 try {
     glpichat_assert_guest_not_throttled(1, 5);
     glpichat_unit_pass('Throttle allows request when 6s elapsed with 5s interval');
 } catch (RuntimeException $error) {
     glpichat_unit_fail('Throttle must not block when 6s elapsed with 5s interval');
+}
+
+// ── glpichat_assert_accept_not_rate_limited ──────────────────────────────────
+
+// B-9B — empty IP: skip rate-limit check (no DB call needed)
+$GLOBALS['DB'] = new ThrottleMockDB([]);
+try {
+    glpichat_assert_accept_not_rate_limited('');
+    glpichat_unit_pass('Rate limit skips check when IP is empty string');
+} catch (RuntimeException $error) {
+    glpichat_unit_fail('Rate limit must not throw when IP is empty string');
+}
+
+// B-9B — IP with 0 failures: allowed
+$GLOBALS['DB'] = new ThrottleMockDB([['COUNT' => 0]]);
+try {
+    glpichat_assert_accept_not_rate_limited('10.0.0.1');
+    glpichat_unit_pass('Rate limit allows request when failure count is 0');
+} catch (RuntimeException $error) {
+    glpichat_unit_fail('Rate limit must not block when there are no previous failures');
+}
+
+// B-9B — IP with 9 failures (< 10): allowed
+$GLOBALS['DB'] = new ThrottleMockDB([['COUNT' => 9]]);
+try {
+    glpichat_assert_accept_not_rate_limited('192.168.1.1');
+    glpichat_unit_pass('Rate limit allows request when failure count is 9 (below threshold)');
+} catch (RuntimeException $error) {
+    glpichat_unit_fail('Rate limit must not block when failure count is 9');
+}
+
+// B-9B — IP with exactly 10 failures: blocked (>= 10 threshold)
+$GLOBALS['DB'] = new ThrottleMockDB([['COUNT' => 10]]);
+try {
+    glpichat_assert_accept_not_rate_limited('192.168.1.1');
+    glpichat_unit_fail('Rate limit must block when failure count reaches 10');
+} catch (RuntimeException $error) {
+    glpichat_unit_assert_same(429, $error->getCode(), 'Rate limit throws with code 429 at threshold');
+    glpichat_unit_assert_true(
+        str_contains($error->getMessage(), 'Too many attempts. Try again later.'),
+        'Rate limit throws canonical message at threshold'
+    );
+    glpichat_unit_pass('Rate limit blocks request when failure count is exactly 10 with code 429');
+}
+
+// B-9B — IP with 47 failures (>> 10): blocked
+$GLOBALS['DB'] = new ThrottleMockDB([['COUNT' => 47]]);
+try {
+    glpichat_assert_accept_not_rate_limited('172.16.0.5');
+    glpichat_unit_fail('Rate limit must block when failure count exceeds 10');
+} catch (RuntimeException $error) {
+    glpichat_unit_assert_same(429, $error->getCode(), 'Rate limit throws with code 429 above threshold');
+    glpichat_unit_pass('Rate limit blocks request when failure count exceeds 10 with code 429');
+}
+
+// B-9B — COUNT key missing from row (defensive): treated as 0, allowed
+$GLOBALS['DB'] = new ThrottleMockDB([[]]);
+try {
+    glpichat_assert_accept_not_rate_limited('192.168.1.2');
+    glpichat_unit_pass('Rate limit allows request when COUNT key is absent from DB row');
+} catch (RuntimeException $error) {
+    glpichat_unit_fail('Rate limit must not block when COUNT key is absent');
 }
 
 fwrite(STDOUT, "[PASS] Guest throttle unit tests completed\n");

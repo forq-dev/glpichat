@@ -117,11 +117,8 @@ final class GuestController extends AbstractController
 
             return new JsonResponse($result);
         } catch (\Throwable $e) {
-            if ($e->getCode() !== 429) {
-                glpichat_log_auth_failure('guest_sync_failed', $e->getMessage(), $request->getClientIp() ?? '');
-            }
-            $status = $e->getCode() === 429 ? 429 : 400;
-            return new JsonResponse(['error' => $e->getMessage()], $status);
+            glpichat_log_auth_failure('guest_sync_failed', $e->getMessage(), $request->getClientIp() ?? '');
+            return new JsonResponse(['error' => $e->getMessage()], 400);
         }
     }
 

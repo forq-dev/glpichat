@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 
 require dirname(__DIR__, 2) . '/bootstrap/unit.php';
+require_once dirname(__DIR__, 3) . '/src/db/guest_db.php';
 require_once dirname(__DIR__, 3) . '/src/flows/guest_flow.php';
 
 final class GuestFlowUploadedFile extends UploadedFile
@@ -12,6 +13,63 @@ final class GuestFlowUploadedFile extends UploadedFile
     public function __construct(string $path, string $original_name)
     {
         parent::__construct($path, $original_name, 'text/plain', null, true);
+    }
+}
+
+/**
+ * Minimal DB mock that returns last_send_at=null for throttle checks,
+ * allowing send/upload use-case tests to pass without hitting a real DB.
+ */
+final class GuestFlowMockIterator implements Iterator
+{
+    private bool $rewound = false;
+
+    public function __construct(private readonly ?array $row)
+    {
+    }
+
+    public function current(): mixed
+    {
+        return $this->row;
+    }
+
+    public function key(): mixed
+    {
+        return 0;
+    }
+
+    public function next(): void
+    {
+        $this->rewound = false;
+    }
+
+    public function rewind(): void
+    {
+        $this->rewound = true;
+    }
+
+    public function valid(): bool
+    {
+        return $this->rewound;
+    }
+}
+
+final class GuestFlowMockDB
+{
+    public function request(array $params): GuestFlowMockIterator
+    {
+        // Return last_send_at=null so throttle check always passes
+        return new GuestFlowMockIterator(['last_send_at' => null]);
+    }
+
+    public function update(string $table, array $data, array $where): void
+    {
+        // No-op: absorbs glpichat_update_participant_last_send() calls
+    }
+
+    public function tableExists(string $table): bool
+    {
+        return false;
     }
 }
 
@@ -134,6 +192,9 @@ glpichat_unit_assert_same_array(
     'Guest leave use case resolves the session token and disconnects the participant'
 );
 glpichat_unit_pass('Guest leave use case resolves the session token and disconnects the participant');
+
+// B-9D: glpichat_assert_guest_not_throttled() requires $DB; provide a mock that always allows
+$GLOBALS['DB'] = new GuestFlowMockDB();
 
 $guest_send_call_log = [];
 $guest_send_message_id = glpichat_guest_send_message_use_case(

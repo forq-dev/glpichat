@@ -2,6 +2,16 @@
 
 declare(strict_types=1);
 
+// Stub glpichat_config_int before the bootstrap loads domain.php.
+// glpichat_display_unread_count (called in this test) delegates to
+// glpichat_config_int which is defined in functions.php, unavailable here.
+if (!function_exists('glpichat_config_int')) {
+    function glpichat_config_int(string $key, int $default): int
+    {
+        return $default;
+    }
+}
+
 require dirname(__DIR__, 2) . '/bootstrap/unit.php';
 require_once dirname(__DIR__, 3) . '/src/flows/notification_flow.php';
 

@@ -211,6 +211,8 @@ function glpichat_assert_guest_not_throttled(int $participants_id, int $min_inte
 {
     global $DB;
 
+    $min_interval_seconds = glpichat_config_int('guest_send_throttle_s', $min_interval_seconds);
+
     $row = $DB->request([
         'SELECT' => ['last_send_at'],
         'FROM'   => 'glpi_plugin_glpichat_participants',
@@ -309,7 +311,7 @@ function glpichat_assert_accept_not_rate_limited(string $ip): void
     if ($ip === '') {
         return;
     }
-    $since    = date('Y-m-d H:i:s', time() - 60);
+    $since    = date('Y-m-d H:i:s', time() - glpichat_config_int('accept_rate_limit_window_s', 60));
     $ip_hash  = hash('sha256', $ip);
     $count    = 0;
     if (isset($DB) && $DB->tableExists('glpi_plugin_glpichat_auditlogs')) {
@@ -324,7 +326,7 @@ function glpichat_assert_accept_not_rate_limited(string $ip): void
         ])->current();
         $count = (int) ($row['COUNT'] ?? 0);
     }
-    if ($count >= 10) {
+    if ($count >= glpichat_config_int('accept_rate_limit_max_attempts', 10)) {
         throw new RuntimeException('Too many attempts. Try again later.', 429);
     }
 }

@@ -148,9 +148,14 @@ function glpichat_default_template_html(): string
 
 function glpichat_display_unread_count(int $raw_unread): int
 {
-    if ($raw_unread <= 1) {
+    if ($raw_unread < glpichat_config_int('unread_badge_threshold', 2)) {
         return 0;
     }
 
     return $raw_unread;
+}
+
+function glpichat_invite_ttl_seconds(): int
+{
+    return glpichat_config_int('invite_ttl_seconds', GLPICHAT_INVITE_TTL_SECONDS);
 }

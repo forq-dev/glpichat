@@ -413,7 +413,13 @@ function glpichat_add_indexes(Migration $migration): void
     $migration->addKey('glpi_plugin_glpichat_participants', 'session_token_hash', 'participants_session');
     $migration->addKey('glpi_plugin_glpichat_readstates', ['participants_id', 'rooms_id'], 'readstates_participant_room');
     $migration->addKey('glpi_plugin_glpichat_invites', 'expires_at', 'invites_expires_at');
+    $migration->addKey('glpi_plugin_glpichat_invites', 'tickets_id', 'idx_invites_ticket');
     $migration->addKey('glpi_plugin_glpichat_auditlogs', ['tickets_id', 'date_creation'], 'audit_ticket_date');
+    $migration->addKey('glpi_plugin_glpichat_participants', ['rooms_id', 'left_at', 'is_typing_until'], 'idx_rooms_typing');
+    $migration->addKey('glpi_plugin_glpichat_participants', ['left_at', 'participant_type', 'last_activity'], 'idx_expire_inactive');
+    $migration->addKey('glpi_plugin_glpichat_messages', 'documents_id', 'idx_messages_document');
+    $migration->addKey('glpi_plugin_glpichat_events', 'date_creation', 'idx_events_date');
+    $migration->addKey('glpi_plugin_glpichat_events', ['rooms_id', 'date_creation'], 'idx_events_room_date');
 }
 
 function glpichat_ensure_runtime_schema(): void

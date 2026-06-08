@@ -180,6 +180,22 @@ function glpichat_create_invite_use_case(
     $validated = glpichat_validate_invite_input($tickets_id, $guest_name, $guest_email);
     $assert_can_create_invites((int) $validated['tickets_id']);
 
+    $max_invites = glpichat_config_int('max_invites_per_ticket', 10);
+    global $DB;
+    $active_count_row = $DB->request([
+        'COUNT' => 'id',
+        'FROM'  => 'glpi_plugin_glpichat_invites',
+        'WHERE' => [
+            'tickets_id'  => (int) $validated['tickets_id'],
+            'accepted_at' => null,
+            'revoked_at'  => null,
+            ['expires_at' => ['>', new \Glpi\DBAL\QueryExpression('NOW()')]],
+        ],
+    ])->current();
+    if ((int) ($active_count_row['COUNT'] ?? 0) >= $max_invites) {
+        throw new RuntimeException('Maximum active invites per ticket reached.');
+    }
+
     $rooms_id = (int) $room_id((int) $validated['tickets_id'], GLPICHAT_ROOM_PUBLIC);
     $token = (string) $generate_token();
     $token_hash = glpichat_guest_invite_token_hash($token);

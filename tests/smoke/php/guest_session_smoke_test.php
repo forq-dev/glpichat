@@ -146,7 +146,7 @@ try {
     task2Assert($expired_sync_response->getStatusCode() === 400, 'Sync deve retornar 400 Bad Request para participante expirado');
     $expired_sync_json = task2Json($expired_sync_response);
     task2Assert(
-        str_contains((string) ($expired_sync_json['error'] ?? ''), 'Guest session has expired due to inactivity.'),
+        str_contains((string) ($expired_sync_json['error'] ?? ''), 'Guest session is invalid.'),
         'Mensagem de erro deve indicar expiração por inatividade'
     );
 

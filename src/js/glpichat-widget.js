@@ -44,6 +44,14 @@ import {
   formatTypingMessage
 } from './modules/format.js';
 
+import {
+  normalizeEventCursor,
+  isNodeNearBottom,
+  hasSelectionInsideNode,
+  firstFileFromTransfer,
+  assignSingleFileToInput,
+} from './modules/shared.js';
+
 "use strict";
 
   const AUTO_SCROLL_THRESHOLD_PX = 160;
@@ -62,15 +70,6 @@ import {
     };
   };
 
-  const normalizeEventCursor = (value) => {
-    if (typeof value === "string") {
-      return value;
-    }
-    if (typeof value === "number" && Number.isFinite(value) && value > 0) {
-      return String(value);
-    }
-    return "";
-  };
 
   const pickLatestEventCursor = (currentValue, nextValue) => {
     const currentCursor = normalizeEventCursor(currentValue);
@@ -98,75 +97,6 @@ import {
     return `${dateValue}|0|${eventId}`;
   };
 
-  const isNodeNearBottom = (node) => {
-    if (!(node instanceof HTMLElement)) {
-      return true;
-    }
-
-    return (node.scrollHeight - (node.scrollTop + node.clientHeight)) <= AUTO_SCROLL_THRESHOLD_PX;
-  };
-
-  const hasSelectionInsideNode = (node) => {
-    if (!(node instanceof HTMLElement)) {
-      return false;
-    }
-
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
-      return false;
-    }
-
-    const anchorNode = selection.anchorNode;
-    const focusNode = selection.focusNode;
-
-    return Boolean(anchorNode && node.contains(anchorNode))
-      || Boolean(focusNode && node.contains(focusNode));
-  };
-
-  const firstFileFromTransfer = (transfer) => {
-    if (!transfer) {
-      return null;
-    }
-
-    if (transfer.files instanceof FileList && transfer.files.length > 0) {
-      const directFile = transfer.files[0];
-      return directFile instanceof File ? directFile : null;
-    }
-
-    if (!transfer.items) {
-      return null;
-    }
-
-    for (const item of Array.from(transfer.items)) {
-      if (!item || item.kind !== "file") {
-        continue;
-      }
-      const file = item.getAsFile();
-      if (file instanceof File) {
-        return file;
-      }
-    }
-
-    return null;
-  };
-
-  const assignSingleFileToInput = (fileInput, file) => {
-    if (!(fileInput instanceof HTMLInputElement) || !(file instanceof File)) {
-      return false;
-    }
-
-    if (typeof DataTransfer !== "function") {
-      return false;
-    }
-
-    const transfer = new DataTransfer();
-    transfer.items.add(file);
-    fileInput.files = transfer.files;
-
-    return fileInput.files instanceof FileList && fileInput.files.length > 0;
-  };
-
-
   const state = {
     get csrf() {
       return getCsrfToken();
@@ -184,6 +114,7 @@ import {
     launcherOpen: false,
     statusFilter: "new",
     closedTicketIds: new Set(),
+    closedTicketTimestamps: new Map(),
     manualTicketIds: new Set(),
     transientTicketIds: new Set(),
     minimizedSnapshot: null,
@@ -191,6 +122,7 @@ import {
     widgetPosition: "bottom-right",
     isDragging: false,
     inviteRefreshTimer: null,
+    config: {},
   };
 
   const ui = {
@@ -208,7 +140,25 @@ import {
     obstructionElements = Array.from(document.body.querySelectorAll("header, footer, nav, .navbar, .fixed-top, .fixed-bottom, .sticky-top"));
   };
 
-  const maxOpenChats = () => (window.innerWidth <= 980 ? MOBILE_MAX_OPEN : DESKTOP_MAX_OPEN);
+  const CLOSED_TICKET_EVICT_MS = 5 * 60 * 1000;
+
+  const evictClosedTickets = () => {
+    const now = Date.now();
+    for (const [ticketId, closedAt] of state.closedTicketTimestamps) {
+      if (now - closedAt >= CLOSED_TICKET_EVICT_MS) {
+        state.closedTicketIds.delete(ticketId);
+        state.closedTicketTimestamps.delete(ticketId);
+        state.tickets.delete(ticketId);
+        for (const [key, channel] of state.channels) {
+          if (channel.tickets_id === ticketId) {
+            state.channels.delete(key);
+          }
+        }
+      }
+    }
+  };
+
+  const maxOpenChats = () => (window.innerWidth <= 980 ? MOBILE_MAX_OPEN : (state.config.desktop_max_open ?? DESKTOP_MAX_OPEN));
 
   const insertBoxInDock = (box) => {
     if (isLeftPosition(state.widgetPosition)) {
@@ -250,11 +200,12 @@ import {
       panel._cancelClose();
     }
     
+    panel.style.willChange = 'transform, opacity';
     panel.classList.add("is-closing");
-    
+
     let called = false;
     let timeoutId = null;
-    
+
     const onEnd = (e) => {
       if (e && e.target !== panel) return; // Prevent bubbling events from children
       if (called) return;
@@ -262,9 +213,10 @@ import {
       cleanup();
       callback();
     };
-    
+
     const cleanup = () => {
       if (timeoutId) clearTimeout(timeoutId);
+      panel.style.willChange = '';
       panel.classList.remove("is-closing");
       panel.removeEventListener("animationend", onEnd);
       delete panel._cancelClose;
@@ -723,7 +675,7 @@ import {
       if (Math.abs(deltaX) < 1 && Math.abs(deltaY) < 1) {
         ui.root.style.transform = '';
         state.isDragging = false;
-        renderDock();
+        scheduleRenderDock();
         hasMoved = false;
         return;
       }
@@ -756,7 +708,7 @@ import {
             ui.root.style.transform = '';
             ui.root.removeEventListener("transitionend", cleanup);
             state.isDragging = false;
-            renderDock();
+            scheduleRenderDock();
           };
           
           ui.root.addEventListener("transitionend", cleanup);
@@ -856,7 +808,7 @@ import {
     state.launcherOpen = false;
     state.openTicketIds = [];
     saveUiState(state);
-    renderDock();
+    scheduleRenderDock();
 
     if (!ui.launcherPanel.hidden) {
       animatePanelClose(ui.launcherPanel, () => {
@@ -895,7 +847,7 @@ import {
       }
     }
     enforceOpenLimit();
-    renderDock();
+    scheduleRenderDock();
     for (const ticketId of state.openTicketIds.slice()) {
       const source = state.manualTicketIds.has(ticketId) ? "manual" : "auto";
       await openTicket(ticketId, source);
@@ -1043,7 +995,7 @@ import {
       typingTimeout = setTimeout(() => {
         channel.isTyping = false;
         pollChannels().catch(console.error);
-      }, 3000);
+      }, state.config.typing_indicator_timeout_ms ?? 3000);
     });
 
     sendForm.addEventListener("submit", async (event) => {
@@ -1222,7 +1174,7 @@ import {
     const messagesNode = box.querySelector("[data-role='messages']");
     const previousHeight = messagesNode.scrollHeight;
     const previousTop = messagesNode.scrollTop;
-    const wasNearBottom = isNodeNearBottom(messagesNode);
+    const wasNearBottom = isNodeNearBottom(messagesNode, state.config.auto_scroll_threshold_px ?? AUTO_SCROLL_THRESHOLD_PX);
     const shouldPreserveSelection = hasSelectionInsideNode(messagesNode);
 
     // Render skeleton loading screen if loading
@@ -1260,7 +1212,7 @@ import {
       renderTypingIndicator(ticketId);
       applyComposerState(ticketId);
       recalcUnread(ticket);
-      renderDock();
+      scheduleRenderDock();
       if (forceScroll) {
         messagesNode.scrollTop = messagesNode.scrollHeight;
       }
@@ -1282,10 +1234,18 @@ import {
       empty.hidden = true;
       if (channel && !channel.renderedMessageIds) {
         channel.renderedMessageIds = new Set();
+        channel.renderedMessageIdsOrder = [];
       }
       for (const entry of timeline) {
         if (entry.kind === "event") {
           const event = entry.data;
+          // Supported event types include: ticket_status_changed, ticket_priority_changed,
+          // ticket_urgency_changed, ticket_impact_changed, ticket_type_changed,
+          // ticket_category_changed, ticket_assigned_users_changed,
+          // ticket_assigned_groups_changed, ticket_followup_added,
+          // guest_joined, guest_left, guest_left_timeout, user_joined, user_left,
+          // messages_purged (payload: { purged_before: "YYYY-MM-DD" })
+          // Formatting is delegated to formatSystemEventMessage in modules/format.js
           const item = document.createElement("div");
           item.className = "glpichat-message is-system";
           item.innerHTML = `
@@ -1311,6 +1271,13 @@ import {
             if (!channel.renderedMessageIds.has(msgId)) {
               extraClasses += " is-new";
               channel.renderedMessageIds.add(msgId);
+              channel.renderedMessageIdsOrder.push(msgId);
+              if (channel.renderedMessageIdsOrder.length > 200) {
+                const evicted = channel.renderedMessageIdsOrder.splice(0, channel.renderedMessageIdsOrder.length - 200);
+                for (const evictedId of evicted) {
+                  channel.renderedMessageIds.delete(evictedId);
+                }
+              }
             }
           }
         }
@@ -1362,7 +1329,7 @@ import {
 
     applyComposerState(ticketId);
     recalcUnread(ticket);
-    renderDock();
+    scheduleRenderDock();
     if (preservePosition) {
       const delta = messagesNode.scrollHeight - previousHeight;
       messagesNode.scrollTop = Math.max(0, previousTop + delta);
@@ -1495,7 +1462,7 @@ import {
     }
     state.openTicketIds = state.openTicketIds.filter((id) => id !== ticketId);
     saveUiState(state);
-    renderDock();
+    scheduleRenderDock();
 
     const performMinimize = () => {
       if (box) {
@@ -1505,7 +1472,7 @@ import {
           panel.classList.remove("is-closing");
         }
       }
-      renderDock();
+      scheduleRenderDock();
     };
 
     animatePanelClose(panel, performMinimize);
@@ -1522,11 +1489,12 @@ import {
       panel.classList.add("is-closing");
     }
     state.closedTicketIds.add(ticketId);
+    state.closedTicketTimestamps.set(ticketId, Date.now());
     state.manualTicketIds.delete(ticketId);
     state.transientTicketIds.delete(ticketId);
     state.openTicketIds = state.openTicketIds.filter((id) => id !== ticketId);
     saveUiState(state);
-    renderDock();
+    scheduleRenderDock();
 
     const performClose = () => {
       if (box) box.remove();
@@ -1588,7 +1556,12 @@ import {
 
       box.classList.toggle("is-open", isOpen);
       if (panel) {
+        const wasHidden = panel.hidden;
         panel.hidden = !isOpen;
+        if (wasHidden && isOpen) {
+          panel.style.willChange = 'transform, opacity';
+          panel.addEventListener('animationend', () => { panel.style.willChange = ''; }, { once: true });
+        }
       }
 
       const label = `Chamado #${sanitize(ticketId)}`;
@@ -1612,10 +1585,32 @@ import {
     renderLauncherNotifications();
   };
 
+  let renderDockPending = false;
+  const scheduleRenderDock = () => {
+    if (renderDockPending) return;
+    renderDockPending = true;
+    requestAnimationFrame(() => { renderDockPending = false; renderDock(); });
+  };
+
+  let lastLauncherNotificationsSignature = '';
   const renderLauncherNotifications = () => {
     if (!state.launcherOpen) {
+      lastLauncherNotificationsSignature = '';
       return;
     }
+
+    const sig = state.statusFilter + '|' + JSON.stringify(
+      Array.from(state.tickets.values()).map((t) => [
+        t.id, t.status,
+        state.channels.get(t.channels?.public)?.unread_count ?? 0,
+        state.channels.get(t.channels?.internal)?.unread_count ?? 0,
+      ])
+    );
+    if (sig === lastLauncherNotificationsSignature) {
+      return;
+    }
+    lastLauncherNotificationsSignature = sig;
+
     const statusFilters = `
       <div class="glpichat-status-filters">
         <button type="button" class="glpichat-status-filter ${state.statusFilter === "new" ? "is-active" : ""}" data-filter="new">Novo</button>
@@ -1771,7 +1766,7 @@ import {
       if (ui.launcherInvites === currentContainer) {
         scheduleInviteRefresh(ticketsId, currentContainer);
       }
-    }, INVITE_REFRESH_MS);
+    }, state.config.invite_poll_ms ?? 10000);
   };
 
   const refreshInvites = async (ticketsId, lastCreatedUrl = null, reissuedInviteId = null, targetContainer = ui.launcherInvites) => {
@@ -2106,7 +2101,7 @@ import {
         return;
       }
       refreshInvites(ticketsId, null, null, container).catch(console.error);
-    }, 10000);
+    }, state.config.invite_poll_ms ?? 10000);
   };
 
   const markRead = async (roomsId, lastReadMessageId) => {
@@ -2125,7 +2120,7 @@ import {
       if (ticket) {
         recalcUnread(ticket);
       }
-      renderDock();
+      scheduleRenderDock();
       break;
     }
     return data;
@@ -2311,7 +2306,7 @@ import {
     for (const ch of data.channels || []) {
       setChannel(ch);
     }
-    renderDock();
+    scheduleRenderDock();
   };
 
   const pollChannels = async () => {
@@ -2443,7 +2438,7 @@ import {
     }
 
     if (hasDockChanges) {
-      renderDock();
+      scheduleRenderDock();
     }
   };
 
@@ -2455,8 +2450,10 @@ import {
       clearInterval(state.metaTimer);
     }
     const interval = document.visibilityState === "visible"
-      ? (state.openTicketIds.length > 0 ? POLL_FOCUSED_MS : POLL_IDLE_MS)
-      : POLL_BG_MS;
+      ? (state.openTicketIds.length > 0
+          ? (state.config.poll_focused_ms ?? POLL_FOCUSED_MS)
+          : (state.config.poll_idle_ms ?? POLL_IDLE_MS))
+      : (state.config.poll_bg_ms ?? POLL_BG_MS);
 
     state.pollTimer = window.setInterval(() => {
       pollChannels().catch(console.error);
@@ -2465,7 +2462,7 @@ import {
       if (document.visibilityState === "visible") {
         syncChannelMetadata().catch(console.error);
       }
-    }, META_SYNC_MS);
+    }, state.config.meta_sync_ms ?? META_SYNC_MS);
   };
 
 
@@ -2485,8 +2482,12 @@ import {
     loadUiState(state);
     createShell();
 
-    const endpoint = `${pluginBase}/Widget/Channels${state.activeTicketId > 0 ? `?tickets_id=${state.activeTicketId}` : ""}`;
-    const data = await fetchJson(endpoint, { credentials: "same-origin" });
+    const channelsEndpoint = `${pluginBase}/Widget/Channels${state.activeTicketId > 0 ? `?tickets_id=${state.activeTicketId}` : ""}`;
+    const [data, configData] = await Promise.all([
+      fetchJson(channelsEndpoint, { credentials: "same-origin" }),
+      fetchJson(`${pluginBase}/Widget/Config`, { credentials: "same-origin" }).catch(() => ({})),
+    ]);
+    state.config = configData || {};
     state.currentUserId = Number(data.current_user_id || 0);
 
     for (const ch of data.channels || []) {
@@ -2501,8 +2502,21 @@ import {
       }
     }
 
+    if (state.config.auto_open_ticket_chat === false) {
+      for (const id of state.transientTicketIds) {
+        state.openTicketIds = state.openTicketIds.filter(t => t !== id);
+      }
+      state.transientTicketIds.clear();
+      state.activeTicketId = 0;
+    }
+
+    if (state.config.widget_default_position && !JSON.parse(localStorage.getItem("glpichat_widget_ui") || "{}").widgetPosition) {
+      state.widgetPosition = state.config.widget_default_position;
+      applyWidgetPosition(state.widgetPosition);
+    }
+
     enforceOpenLimit();
-    renderDock();
+    scheduleRenderDock();
 
     for (const ticketId of state.openTicketIds.slice()) {
       const source = state.manualTicketIds.has(ticketId) ? "manual" : "auto";
@@ -2525,13 +2539,14 @@ import {
 
     window.addEventListener("resize", () => {
       enforceOpenLimit();
-      renderDock();
+      scheduleRenderDock();
       throttledUpdateSafeBottom();
     });
 
     window.addEventListener("scroll", throttledUpdateSafeBottom, { passive: true });
     document.addEventListener("visibilitychange", schedulePolling);
     window.setInterval(throttledUpdateSafeBottom, 2000);
+    window.setInterval(evictClosedTickets, CLOSED_TICKET_EVICT_MS);
   };
 
   const bootWidget = () => {

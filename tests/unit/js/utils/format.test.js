@@ -113,6 +113,24 @@ describe('Format Module', () => {
       expect(formatSystemEventMessage(null)).toBe('Evento operacional registrado.');
       expect(formatSystemEventMessage({})).toBe('Evento operacional registrado.');
     });
+
+    it('should format messages_purged event with purged_before date', () => {
+      const event = {
+        event_type: 'messages_purged',
+        payload: {
+          purged_before: '2024-05-01'
+        }
+      };
+      expect(formatSystemEventMessage(event)).toBe('⚠ Mensagens anteriores a 2024-05-01 foram expurgadas do histórico do chat.');
+    });
+
+    it('should format messages_purged event without purged_before date', () => {
+      const event = {
+        event_type: 'messages_purged',
+        payload: {}
+      };
+      expect(formatSystemEventMessage(event)).toBe('⚠ Mensagens antigas foram expurgadas do histórico do chat.');
+    });
   });
 
   describe('formatTypingMessage', () => {

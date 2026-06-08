@@ -18,6 +18,7 @@ const VISIBLE_SYSTEM_EVENT_TYPES = new Set([
   "guest_left_timeout",
   "user_joined",
   "user_left",
+  "messages_purged",
 ]);
 
 export const isVisibleSystemEvent = (event) => {
@@ -85,6 +86,12 @@ export const formatSystemEventMessage = (event) => {
   }
   if (event.event_type === "user_left") {
     return `${String(payload.user_name || "Usuário")} saiu do chat.`;
+  }
+  if (event.event_type === "messages_purged") {
+    const date = String(payload.purged_before || "");
+    return date
+      ? `⚠ Mensagens anteriores a ${date} foram expurgadas do histórico do chat.`
+      : "⚠ Mensagens antigas foram expurgadas do histórico do chat.";
   }
 
   return "Evento operacional registrado.";

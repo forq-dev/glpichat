@@ -20,19 +20,17 @@ import {
   formatTypingMessage
 } from './modules/format.js';
 
+import {
+  normalizeEventCursor,
+  isNodeNearBottom,
+  hasSelectionInsideNode,
+  firstFileFromTransfer,
+  assignSingleFileToInput,
+} from './modules/shared.js';
+
 "use strict";
 
 const AUTO_SCROLL_THRESHOLD_PX = 160;
-
-const normalizeEventCursor = (value) => {
-  if (typeof value === "string") {
-    return value;
-  }
-  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
-    return String(value);
-  }
-  return "";
-};
 
 const pickLatestEventCursor = (currentValue, nextValue) => {
   const currentCursor = normalizeEventCursor(currentValue);
@@ -44,74 +42,6 @@ const pickLatestEventCursor = (currentValue, nextValue) => {
     return currentCursor;
   }
   return currentCursor.localeCompare(nextCursor) >= 0 ? currentCursor : nextCursor;
-};
-
-const isNodeNearBottom = (node) => {
-  if (!(node instanceof HTMLElement)) {
-    return true;
-  }
-
-  return (node.scrollHeight - (node.scrollTop + node.clientHeight)) <= AUTO_SCROLL_THRESHOLD_PX;
-};
-
-const hasSelectionInsideNode = (node) => {
-  if (!(node instanceof HTMLElement)) {
-    return false;
-  }
-
-  const selection = window.getSelection();
-  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
-    return false;
-  }
-
-  const anchorNode = selection.anchorNode;
-  const focusNode = selection.focusNode;
-
-  return Boolean(anchorNode && node.contains(anchorNode))
-    || Boolean(focusNode && node.contains(focusNode));
-};
-
-const firstFileFromTransfer = (transfer) => {
-  if (!transfer) {
-    return null;
-  }
-
-  if (transfer.files instanceof FileList && transfer.files.length > 0) {
-    const directFile = transfer.files[0];
-    return directFile instanceof File ? directFile : null;
-  }
-
-  if (!transfer.items) {
-    return null;
-  }
-
-  for (const item of Array.from(transfer.items)) {
-    if (!item || item.kind !== "file") {
-      continue;
-    }
-    const file = item.getAsFile();
-    if (file instanceof File) {
-      return file;
-    }
-  }
-
-  return null;
-};
-
-const assignSingleFileToInput = (fileInput, file) => {
-  if (!(fileInput instanceof HTMLInputElement) || !(file instanceof File)) {
-    return false;
-  }
-
-  if (typeof DataTransfer !== "function") {
-    return false;
-  }
-
-  const transfer = new DataTransfer();
-  transfer.items.add(file);
-  fileInput.files = transfer.files;
-
-  return fileInput.files instanceof FileList && fileInput.files.length > 0;
 };
 
 const statusKeyFromCode = (status) => {
@@ -236,7 +166,7 @@ const bootstrapGuest = async (guestRoot) => {
     countdownEl.textContent = `Expira em ${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
   };
 
-  window.setInterval(() => {
+  const countdownIntervalId = window.setInterval(() => {
     if (secondsRemaining > 0 && !isExpired) {
       secondsRemaining--;
       updateCountdownDisplay();
@@ -289,6 +219,13 @@ const bootstrapGuest = async (guestRoot) => {
       return;
     }
 
+    // Supported event types include: guest_joined, guest_left, guest_left_timeout,
+    // user_joined, user_left, ticket_status_changed, ticket_priority_changed,
+    // ticket_urgency_changed, ticket_impact_changed, ticket_type_changed,
+    // ticket_category_changed, ticket_assigned_users_changed,
+    // ticket_assigned_groups_changed, ticket_followup_added,
+    // messages_purged (payload: { purged_before: "YYYY-MM-DD" })
+    // Formatting is delegated to formatSystemEventMessage in modules/format.js
     const item = document.createElement("div");
     item.className = `glpichat-message is-system${skipAnimation ? "" : " is-new"}`;
     item.innerHTML = `
@@ -335,7 +272,7 @@ const bootstrapGuest = async (guestRoot) => {
     if (isExpired) return;
     try {
       const shouldAutoScroll = !hasSelectionInsideNode(messages)
-        && (isNodeNearBottom(messages) || !initialSyncDone);
+        && (isNodeNearBottom(messages, window.__glpichatConfig?.auto_scroll_threshold_px ?? AUTO_SCROLL_THRESHOLD_PX) || !initialSyncDone);
       const params = new URLSearchParams({
         last_message_id: String(lastMessageId),
         last_event_id: String(lastEventId),
@@ -451,7 +388,7 @@ const bootstrapGuest = async (guestRoot) => {
         guestTypingTimeout = setTimeout(() => {
           guestIsTyping = false;
           syncGuest().catch(console.error);
-        }, 3000);
+        }, window.__glpichatConfig?.typing_indicator_timeout_ms ?? 3000);
       });
     }
 
@@ -538,13 +475,17 @@ const bootstrapGuest = async (guestRoot) => {
     console.error("Initial guest sync failed:", e);
   }
 
-  window.setInterval(() => {
+  const syncIntervalId = window.setInterval(() => {
     if (document.visibilityState === "visible" && !isExpired) {
       syncGuest().catch(console.error);
     }
-  }, 5000);
+  }, window.__glpichatConfig?.guest_poll_ms ?? 5000);
 
-  window.addEventListener("pagehide", notifyGuestLeave, { capture: true });
+  window.addEventListener("pagehide", () => {
+    window.clearInterval(countdownIntervalId);
+    window.clearInterval(syncIntervalId);
+    notifyGuestLeave();
+  }, { capture: true });
 };
 
 const bootGuest = () => {

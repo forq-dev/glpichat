@@ -298,7 +298,6 @@
   display: grid;
   grid-template-rows: auto auto auto 1fr auto auto;
   transition: box-shadow 180ms ease, border-color 180ms ease;
-  will-change: transform, opacity;
 }
 
 .glpichat-window-head {
@@ -1298,7 +1297,6 @@
   from {
     opacity: 0;
     transform: scale(0.90) translate(12px, 12px);
-    filter: blur(4px);
   }
   to {
     opacity: 1;
@@ -1309,7 +1307,6 @@
   from {
     opacity: 1;
     transform: scale(1) translate(0, 0);
-    filter: blur(0px);
   }
   to {
     opacity: 0;
@@ -1321,7 +1318,6 @@
   from {
     opacity: 0;
     transform: scale(0.90) translate(-12px, 12px);
-    filter: blur(4px);
   }
   to {
     opacity: 1;
@@ -1332,7 +1328,6 @@
   from {
     opacity: 1;
     transform: scale(1) translate(0, 0);
-    filter: blur(0px);
   }
   to {
     opacity: 0;
@@ -1344,7 +1339,6 @@
   from {
     opacity: 0;
     transform: scale(0.90) translate(12px, -12px);
-    filter: blur(4px);
   }
   to {
     opacity: 1;
@@ -1355,7 +1349,6 @@
   from {
     opacity: 1;
     transform: scale(1) translate(0, 0);
-    filter: blur(0px);
   }
   to {
     opacity: 0;
@@ -1367,7 +1360,6 @@
   from {
     opacity: 0;
     transform: scale(0.90) translate(-12px, -12px);
-    filter: blur(4px);
   }
   to {
     opacity: 1;
@@ -1378,7 +1370,6 @@
   from {
     opacity: 1;
     transform: scale(1) translate(0, 0);
-    filter: blur(0px);
   }
   to {
     opacity: 0;
@@ -1542,15 +1533,8 @@
 }
 
 @keyframes glpichat-badge-pulse {
-  0% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--glpichat-primary) 70%, transparent);
-  }
-  70% {
-    box-shadow: 0 0 0 6px color-mix(in srgb, var(--glpichat-primary) 0%, transparent);
-  }
-  100% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--glpichat-primary) 0%, transparent);
-  }
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.65; }
 }
 
 /* --- Animação de Fechamento (Closing State) --- */
@@ -1562,7 +1546,6 @@
   from {
     opacity: 0;
     transform: scale(0.90) translateY(16px);
-    filter: blur(4px);
   }
   to {
     opacity: 1;
@@ -1574,7 +1557,6 @@
   from {
     opacity: 1;
     transform: scale(1) translateY(0);
-    filter: blur(0px);
   }
   to {
     opacity: 0;

@@ -2,6 +2,50 @@
 
 declare(strict_types=1);
 
+// Stub glpichat_config_int before loading invite_flow.php.
+// glpichat_create_invite_use_case calls glpichat_config_int('max_invites_per_ticket', 10)
+// which is defined in functions.php (not available in unit context).
+// The stub returns the default, keeping the use-case logic testable in isolation.
+if (!function_exists('glpichat_config_int')) {
+    function glpichat_config_int(string $key, int $default): int
+    {
+        return $default;
+    }
+}
+
+// Stub global $DB for glpichat_create_invite_use_case's active-invite count query.
+// With the default max_invites_per_ticket=10 and count=0 the flow proceeds normally.
+final class InviteFlowTestDbResult implements IteratorAggregate
+{
+    public function __construct(private array $rows)
+    {
+    }
+
+    public function getIterator(): Traversable
+    {
+        return new ArrayIterator($this->rows);
+    }
+
+    public function current(): mixed
+    {
+        return $this->rows[0] ?? false;
+    }
+}
+
+final class InviteFlowTestDb
+{
+    /** @var int Simulated COUNT of active invites returned by the stub. */
+    public int $active_count = 0;
+
+    public function request(array $query): InviteFlowTestDbResult
+    {
+        return new InviteFlowTestDbResult([['COUNT' => $this->active_count]]);
+    }
+}
+
+global $DB;
+$DB = new InviteFlowTestDb();
+
 require dirname(__DIR__, 2) . '/bootstrap/unit.php';
 require_once dirname(__DIR__, 3) . '/src/flows/guest_flow.php';
 require_once dirname(__DIR__, 3) . '/src/flows/invite_flow.php';

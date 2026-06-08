@@ -4,6 +4,14 @@ declare(strict_types=1);
 
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 
+// Stub glpichat_config_int before loading guest_db.php which calls it at runtime.
+if (!function_exists('glpichat_config_int')) {
+    function glpichat_config_int(string $key, int $default): int
+    {
+        return $default;
+    }
+}
+
 require dirname(__DIR__, 2) . '/bootstrap/unit.php';
 require_once dirname(__DIR__, 3) . '/src/db/guest_db.php';
 require_once dirname(__DIR__, 3) . '/src/flows/guest_flow.php';

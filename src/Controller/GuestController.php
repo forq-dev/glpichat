@@ -18,6 +18,7 @@ use Symfony\Component\Routing\Attribute\Route;
 use function glpichat_accept_invite;
 use function glpichat_accept_invite_use_case;
 use function glpichat_assert_accept_not_rate_limited;
+use function glpichat_config_int;
 use function glpichat_events;
 use function glpichat_guest_leave_use_case;
 use function glpichat_guest_send_message_use_case;
@@ -85,9 +86,10 @@ final class GuestController extends AbstractController
         try {
             $participant = glpichat_guest_participant($session_token);
             $room = glpichat_room_by_id((int) $participant['rooms_id']);
-            $response = new Response($this->guestHtml((int) $room['tickets_id'], (int) $participant['rooms_id'], (string) $participant['guest_name']));
+            $nonce = base64_encode(random_bytes(16));
+            $response = new Response($this->guestHtml((int) $room['tickets_id'], (int) $participant['rooms_id'], (string) $participant['guest_name'], $nonce));
             $response->headers->set('X-Frame-Options', 'DENY');
-            $response->headers->set('Content-Security-Policy', "default-src 'self'; style-src 'self'; script-src 'self'");
+            $response->headers->set('Content-Security-Policy', "default-src 'self'; style-src 'self'; script-src 'self' 'nonce-{$nonce}'");
             $response->headers->set('Referrer-Policy', 'no-referrer');
             return $response;
         } catch (RuntimeException $e) {
@@ -198,7 +200,7 @@ final class GuestController extends AbstractController
         }
     }
 
-    private function guestHtml(int $tickets_id, int $rooms_id, string $guest_name): string
+    private function guestHtml(int $tickets_id, int $rooms_id, string $guest_name, string $nonce = ''): string
     {
         global $CFG_GLPI;
         $url_path = parse_url($CFG_GLPI['url_base'] ?? '', PHP_URL_PATH) ?? '';
@@ -237,6 +239,12 @@ final class GuestController extends AbstractController
             . '    </button>'
             . '  </form>'
             . '</div>'
-            . '</main><script src="' . $url_path . '/plugins/glpichat/public/js/glpichat-guest.js?v=' . $js_version . '"></script></body></html>';
+            . '</main>'
+            . '<script' . ($nonce !== '' ? ' nonce="' . htmlescape($nonce) . '"' : '') . '>window.__glpichatConfig=' . json_encode([
+                'guest_poll_ms'                => glpichat_config_int('guest_poll_ms', 5000),
+                'auto_scroll_threshold_px'     => glpichat_config_int('auto_scroll_threshold_px', 160),
+                'typing_indicator_timeout_ms'  => glpichat_config_int('typing_indicator_timeout_ms', 3000),
+            ]) . ';</script>'
+            . '<script src="' . $url_path . '/plugins/glpichat/public/js/glpichat-guest.js?v=' . $js_version . '"></script></body></html>';
     }
 }

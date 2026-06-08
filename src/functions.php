@@ -18,6 +18,21 @@ require_once __DIR__ . '/db/guest_db.php';
 require_once __DIR__ . '/db/readstate_db.php';
 require_once __DIR__ . '/core_event_feed.php';
 
+function glpichat_config_int(string $key, int $default): int
+{
+    $v = (int) \Config::getConfigurationValue('plugin:glpichat', $key);
+    return $v > 0 ? $v : $default;
+}
+
+function glpichat_config_bool(string $key, bool $default): bool
+{
+    $v = \Config::getConfigurationValue('plugin:glpichat', $key);
+    if ($v === null || $v === '') {
+        return $default;
+    }
+    return (bool)(int)$v;
+}
+
 function glpichat_require_logged_csrf(array $input): void
 {
     Session::checkLoginUser();
@@ -55,6 +70,13 @@ function glpichat_external_followup_user_id(): int
 
 function glpichat_room_id(int $tickets_id, string $room_type): int
 {
+    static $cache = [];
+
+    $cache_key = $tickets_id . ':' . $room_type;
+    if (isset($cache[$cache_key])) {
+        return $cache[$cache_key];
+    }
+
     global $DB;
 
     $room = $DB->request([
@@ -67,7 +89,8 @@ function glpichat_room_id(int $tickets_id, string $room_type): int
     ])->current();
 
     if (is_array($room)) {
-        return (int) $room['id'];
+        $cache[$cache_key] = (int) $room['id'];
+        return $cache[$cache_key];
     }
 
     $DB->insert('glpi_plugin_glpichat_rooms', [
@@ -76,15 +99,24 @@ function glpichat_room_id(int $tickets_id, string $room_type): int
         'date_creation' => $_SESSION['glpi_currenttime'] ?? date('Y-m-d H:i:s'),
     ]);
 
-    return (int) $DB->insertId();
+    $cache[$cache_key] = (int) $DB->insertId();
+    return $cache[$cache_key];
 }
 
 function glpichat_ticket_or_fail(int $tickets_id): Ticket
 {
+    static $cache = [];
+
+    if (isset($cache[$tickets_id])) {
+        return $cache[$tickets_id];
+    }
+
     $ticket = new Ticket();
     if (!$ticket->getFromDB($tickets_id)) {
         throw new RuntimeException('Ticket not found.');
     }
+
+    $cache[$tickets_id] = $ticket;
 
     return $ticket;
 }
@@ -369,7 +401,7 @@ function glpichat_expire_inactive_user_participants(): void
     global $DB;
 
     $now_ts = time();
-    $threshold_time = date('Y-m-d H:i:s', $now_ts - 120); // 2 minutos (120 segundos)
+    $threshold_time = date('Y-m-d H:i:s', $now_ts - glpichat_config_int('user_inactivity_timeout_s', 120));
 
     $participants = $DB->request([
         'FROM' => 'glpi_plugin_glpichat_participants',
@@ -417,20 +449,25 @@ function glpichat_expire_inactive_user_participants(): void
 
 function glpichat_add_followup(int $tickets_id, int $users_id, string $content, bool $is_private): int
 {
+    static $cached_requesttypes_id = null;
+
     $followup = new ITILFollowup();
 
-    $requesttype = new RequestType();
-    $rt_search = ['name' => 'GLPI Chat'];
-    $rt_id = $requesttype->findID($rt_search);
-    if ($rt_id <= 0) {
-        $rt_id = $requesttype->add([
-            'name' => 'GLPI Chat',
-            'is_active' => 1,
-            'is_itilfollowup' => 1,
-        ]);
+    if ($cached_requesttypes_id === null) {
+        $requesttype = new RequestType();
+        $rt_search = ['name' => 'GLPI Chat'];
+        $rt_id = $requesttype->findID($rt_search);
+        if ($rt_id <= 0) {
+            $rt_id = $requesttype->add([
+                'name' => 'GLPI Chat',
+                'is_active' => 1,
+                'is_itilfollowup' => 1,
+            ]);
+        }
+        $cached_requesttypes_id = $rt_id > 0 ? $rt_id : RequestType::getDefault('followup');
     }
 
-    $requesttypes_id = $rt_id > 0 ? $rt_id : RequestType::getDefault('followup');
+    $requesttypes_id = $cached_requesttypes_id;
 
     $id = $followup->add([
         'itemtype' => Ticket::class,
@@ -766,23 +803,86 @@ function glpichat_add_message(
     return $message_id;
 }
 
-function glpichat_messages(int $rooms_id, int $last_message_id): array
+/**
+ * Fetch display names for a batch of user IDs in a single query.
+ * Replicates the name formatting of getUserName() / formatUserName() without anonymization,
+ * which is acceptable in the chat context (agent/technician side).
+ *
+ * @param array<int> $user_ids
+ * @return array<int, string>  Map of users_id => formatted name
+ */
+function glpichat_batch_user_names(array $user_ids): array
 {
     global $DB;
 
-    $rows = [];
+    if (empty($user_ids)) {
+        return [];
+    }
+
+    $unique_ids = array_values(array_unique(array_filter($user_ids, static fn(int $id): bool => $id > 0)));
+    if (empty($unique_ids)) {
+        return [];
+    }
+
+    $rows = $DB->request([
+        'SELECT' => ['id', 'name', 'realname', 'firstname'],
+        'FROM'   => 'glpi_users',
+        'WHERE'  => ['id' => $unique_ids],
+    ]);
+
+    $map = [];
+    foreach ($rows as $row) {
+        $id = (int) ($row['id'] ?? 0);
+        if ($id <= 0) {
+            continue;
+        }
+        $map[$id] = (string) formatUserName(
+            $id,
+            $row['name'] ?? '',
+            $row['realname'] ?? '',
+            $row['firstname'] ?? ''
+        );
+    }
+
+    return $map;
+}
+
+function glpichat_messages(int $rooms_id, int $last_message_id, string $min_date = ''): array
+{
+    global $DB;
+
+    $raw_rows = [];
     $guest_name_by_participant = [];
+    $where = [
+        'rooms_id' => $rooms_id,
+        ['id' => ['>', $last_message_id]],
+    ];
+    if ($min_date !== '') {
+        $where[] = ['date_creation' => ['>=', $min_date]];
+    }
     $iterator = $DB->request([
         'FROM' => 'glpi_plugin_glpichat_messages',
-        'WHERE' => [
-            'rooms_id' => $rooms_id,
-            ['id' => ['>', $last_message_id]],
-        ],
+        'WHERE' => $where,
         'ORDER' => ['id ASC'],
         'LIMIT' => 50,
     ]);
 
     foreach ($iterator as $row) {
+        $raw_rows[] = $row;
+    }
+
+    // Collect all users_id values for a single batch lookup
+    $user_ids = [];
+    foreach ($raw_rows as $row) {
+        $uid = (int) ($row['users_id'] ?? 0);
+        if ($uid > 0) {
+            $user_ids[] = $uid;
+        }
+    }
+    $user_names = glpichat_batch_user_names($user_ids);
+
+    $rows = [];
+    foreach ($raw_rows as $row) {
         $actor_type = (string) ($row['participant_type'] ?? '');
         $users_id = (int) ($row['users_id'] ?? 0);
         $participant_id = (int) ($row['participants_id'] ?? 0);
@@ -807,7 +907,7 @@ function glpichat_messages(int $rooms_id, int $last_message_id): array
                 $actor_type,
                 $users_id,
                 $participant_id,
-                $users_id > 0 ? (string) (getUserName($users_id) ?: '') : '',
+                $users_id > 0 ? ($user_names[$users_id] ?? '') : '',
                 $guest_name,
                 'User #',
                 'Convidado #',
@@ -920,7 +1020,7 @@ function glpichat_messages_before(int $rooms_id, int $before_id, int $limit): ar
         $where[] = ['id' => ['<', $before_id]];
     }
 
-    $rows = [];
+    $raw_rows = [];
     $iterator = $DB->request([
         'FROM' => 'glpi_plugin_glpichat_messages',
         'WHERE' => $where,
@@ -929,13 +1029,29 @@ function glpichat_messages_before(int $rooms_id, int $before_id, int $limit): ar
     ]);
 
     foreach ($iterator as $row) {
+        $raw_rows[] = $row;
+    }
+
+    // Collect all users_id values for a single batch lookup
+    $user_ids = [];
+    foreach ($raw_rows as $row) {
+        $uid = (int) ($row['users_id'] ?? 0);
+        if ($uid > 0) {
+            $user_ids[] = $uid;
+        }
+    }
+    $user_names = glpichat_batch_user_names($user_ids);
+
+    $rows = [];
+    foreach ($raw_rows as $row) {
+        $users_id = (int) ($row['users_id'] ?? 0);
         $rows[] = glpichat_message_output_row(
             $row,
             glpichat_sender_name_for_actor(
                 (string) ($row['participant_type'] ?? ''),
-                (int) ($row['users_id'] ?? 0),
+                $users_id,
                 (int) ($row['participants_id'] ?? 0),
-                (string) (getUserName((int) ($row['users_id'] ?? 0)) ?: ''),
+                $users_id > 0 ? ($user_names[$users_id] ?? '') : '',
                 null,
                 'User #',
                 'Convidado #',

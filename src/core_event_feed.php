@@ -127,13 +127,18 @@ function glpichat_followup_source_label(int $requesttypes_id): string
 
 function glpichat_followup_author_name(int $users_id): string
 {
+    static $cache = [];
+
     if ($users_id <= 0) {
         return 'Sistema';
     }
 
-    $name = getUserName($users_id);
+    if (!isset($cache[$users_id])) {
+        $name = getUserName($users_id);
+        $cache[$users_id] = is_string($name) && $name !== '' ? $name : ('Usuario #' . $users_id);
+    }
 
-    return is_string($name) && $name !== '' ? $name : ('Usuario #' . $users_id);
+    return $cache[$users_id];
 }
 
 function glpichat_ticket_category_name(int $itilcategories_id): string

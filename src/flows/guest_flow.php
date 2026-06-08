@@ -173,29 +173,15 @@ function glpichat_guest_sync_use_case(
 
     $joined_at = $participant['joined_at'] ?? '';
 
-    $all_messages = $messages($rooms_id, $last_message_id);
-    $filtered_messages = [];
-    if ($joined_at !== '') {
-        foreach ($all_messages as $msg) {
-            if (($msg['date_creation'] ?? '') >= $joined_at) {
-                $filtered_messages[] = $msg;
-            }
-        }
-    } else {
-        $filtered_messages = $all_messages;
-    }
+    // Pass joined_at as SQL filter to avoid loading and discarding rows in PHP.
+    $filtered_messages = $messages($rooms_id, $last_message_id, $joined_at);
 
-    $all_events = $events($rooms_id, $last_event_id);
-    $filtered_events = [];
-    if ($joined_at !== '') {
-        foreach ($all_events as $evt) {
-            if (($evt['date_creation'] ?? '') >= $joined_at) {
-                $filtered_events[] = $evt;
-            }
-        }
-    } else {
-        $filtered_events = $all_events;
-    }
+    // For events, use joined_at as the initial cursor date when no cursor has been set yet,
+    // so the SQL query already filters by date instead of discarding rows in PHP.
+    $effective_event_cursor = ($last_event_id === '' || $last_event_id === '0') && $joined_at !== ''
+        ? $joined_at . '||0'
+        : $last_event_id;
+    $filtered_events = $events($rooms_id, $effective_event_cursor);
 
     return [
         'messages' => $filtered_messages,

@@ -15,12 +15,13 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 
 use function glpichat_assert_can_read_room;
+use function glpichat_config_bool;
+use function glpichat_config_int;
 use function glpichat_current_user_id;
 use function glpichat_events;
 use function glpichat_get_typing_participants;
 use function glpichat_list_user_channels;
 use function glpichat_mark_read;
-use function glpichat_room_last_event_id;
 use function glpichat_room_last_message_id;
 use function glpichat_messages;
 use function glpichat_messages_before;
@@ -75,7 +76,7 @@ final class WidgetController extends AbstractController
             $result = [];
             $count = 0;
             foreach ($channels as $channel) {
-                if ($count >= 20) {
+                if ($count >= glpichat_config_int('poll_max_channels', 20)) {
                     break;
                 }
 
@@ -99,6 +100,10 @@ final class WidgetController extends AbstractController
                     $events = glpichat_events($rooms_id, $after_event_id);
                     $typing_names = glpichat_get_typing_participants($rooms_id, $participants_id);
 
+                    $last_event_id = count($events) > 0
+                        ? (string) ($events[count($events) - 1]['id'] ?? '')
+                        : $after_event_id;
+
                     $key = $tickets_id . ':' . $room_type;
                     $result[$key] = [
                         'rooms_id' => $rooms_id,
@@ -108,7 +113,7 @@ final class WidgetController extends AbstractController
                         'events' => $events,
                         'ticket_status' => glpichat_ticket_status($tickets_id),
                         'last_message_id' => glpichat_room_last_message_id($rooms_id),
-                        'last_event_id' => glpichat_room_last_event_id($rooms_id),
+                        'last_event_id' => $last_event_id,
                         'participants_id' => $participants_id,
                         'unread_count' => glpichat_unread_count($rooms_id, $participants_id),
                         'typing_names' => $typing_names,
@@ -137,7 +142,9 @@ final class WidgetController extends AbstractController
             Session::checkLoginUser();
             $rooms_id = $request->query->getInt('rooms_id');
             $before_id = $request->query->getInt('before_id');
-            $limit = max(1, min(50, $request->query->getInt('limit') ?: 30));
+            $history_default = glpichat_config_int('history_page_default', 30);
+            $history_max = glpichat_config_int('history_page_max', 50);
+            $limit = max(1, min($history_max, $request->query->getInt('limit') ?: $history_default));
             if ($rooms_id <= 0) {
                 throw new RuntimeException('Invalid history parameters.');
             }
@@ -199,6 +206,37 @@ final class WidgetController extends AbstractController
         } catch (RuntimeException $e) {
             $status = $e->getCode() === 403 ? 403 : 400;
             return new JsonResponse(['error' => $e->getMessage()], $status);
+        }
+    }
+
+    #[Route('/Widget/Config', name: 'glpichat_widget_config', methods: ['GET'])]
+    #[SecurityStrategy(Firewall::STRATEGY_AUTHENTICATED)]
+    public function config(Request $request): Response
+    {
+        try {
+            Session::checkLoginUser();
+
+            $valid_positions = ['bottom-right', 'bottom-left', 'top-left', 'top-right'];
+            $raw_position = (string) \Config::getConfigurationValue('plugin:glpichat', 'widget_default_position');
+            $widget_default_position = in_array($raw_position, $valid_positions, true) ? $raw_position : 'bottom-right';
+
+            return new JsonResponse([
+                'poll_focused_ms'            => glpichat_config_int('poll_focused_ms', 2500),
+                'poll_idle_ms'               => glpichat_config_int('poll_idle_ms', 9000),
+                'poll_bg_ms'                 => glpichat_config_int('poll_bg_ms', 18000),
+                'meta_sync_ms'               => glpichat_config_int('meta_sync_ms', 15000),
+                'invite_poll_ms'             => glpichat_config_int('invite_poll_ms', 10000),
+                'desktop_max_open'           => glpichat_config_int('desktop_max_open', 3),
+                'widget_default_position'    => $widget_default_position,
+                'typing_indicator_timeout_ms' => glpichat_config_int('typing_indicator_timeout_ms', 3000),
+                'auto_open_ticket_chat'      => glpichat_config_bool('auto_open_ticket_chat', true),
+                'auto_scroll_threshold_px'   => glpichat_config_int('auto_scroll_threshold_px', 160),
+                'history_page_default'       => glpichat_config_int('history_page_default', 30),
+                'history_page_max'           => glpichat_config_int('history_page_max', 50),
+                '_glpi_csrf_token'           => \Session::getNewCSRFToken(),
+            ]);
+        } catch (RuntimeException $e) {
+            return new JsonResponse(['error' => $e->getMessage()], 400);
         }
     }
 

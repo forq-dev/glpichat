@@ -14,6 +14,7 @@ use function glpichat_can_create_invites;
 use function glpichat_can_update_invites;
 use function glpichat_can_view_participants;
 use function glpichat_can_view_audit;
+use function glpichat_config_int;
 
 final class TicketTab extends CommonGLPI
 {
@@ -58,6 +59,7 @@ final class TicketTab extends CommonGLPI
             $csrf = Session::getNewCSRFToken();
             $can_create_invites = glpichat_can_create_invites($tickets_id);
             $can_update_invites = glpichat_can_update_invites($tickets_id);
+            $invite_poll_ms = glpichat_config_int('invite_poll_ms', 10000);
             echo '<div class="card">';
             echo '<div class="card-header"><strong>Gestão de invites</strong></div>';
             echo '<div class="card-body">';
@@ -349,7 +351,7 @@ final class TicketTab extends CommonGLPI
                             }
                             
                             render().catch(function () {});
-                        }, 10000);
+                        }, " . $invite_poll_ms . ");
                     }).catch(function (error) {
                         root.innerHTML = '<div class=\"alert alert-warning\">Falha ao carregar gestão de invites: ' + error.message + '</div>';
                     });

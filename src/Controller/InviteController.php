@@ -16,6 +16,7 @@ use Symfony\Component\Routing\Attribute\Route;
 
 use function glpichat_create_invite_use_case;
 use function glpichat_assert_can_create_invites;
+use function glpichat_invite_ttl_seconds;
 use function glpichat_require_logged_csrf;
 
 require_once dirname(__DIR__) . '/functions.php';
@@ -54,7 +55,7 @@ final class InviteController extends AbstractController
                 'glpichat_current_user_id',
                 'glpichat_insert_invite',
                 'glpichat_record_event',
-                GLPICHAT_INVITE_TTL_SECONDS
+                glpichat_invite_ttl_seconds()
             );
             $invite['_glpi_csrf_token'] = Session::getNewCSRFToken();
             return new JsonResponse($invite);

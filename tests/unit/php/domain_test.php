@@ -2,6 +2,18 @@
 
 declare(strict_types=1);
 
+// Stub glpichat_config_int before loading domain.php via bootstrap.
+// domain.php calls glpichat_config_int (defined in functions.php) at runtime
+// inside glpichat_display_unread_count and glpichat_invite_ttl_seconds.
+// In the unit context the stub returns the provided default, keeping the
+// function pure and independent of the GLPI Config DB.
+if (!function_exists('glpichat_config_int')) {
+    function glpichat_config_int(string $key, int $default): int
+    {
+        return $default;
+    }
+}
+
 require dirname(__DIR__, 2) . '/bootstrap/unit.php';
 
 glpichat_unit_assert_same_array(

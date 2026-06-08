@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use Glpi\DBAL\QueryFunction;
+
 function glpichat_readstate_last_message_id(int $rooms_id, int $participants_id): int
 {
     global $DB;
@@ -178,14 +180,82 @@ function glpichat_list_user_channels(int $users_id, int $focus_tickets_id): arra
         }
     }
 
-    if (count($linked_tickets) > 0) {
-        $ticket_rows = $DB->request([
-            'SELECT' => ['id', 'status'],
-            'FROM' => 'glpi_tickets',
-            'WHERE' => ['id' => array_keys($linked_tickets)],
+    if (count($linked_tickets) === 0) {
+        return [];
+    }
+
+    $ticket_ids = array_keys($linked_tickets);
+
+    $ticket_rows = $DB->request([
+        'SELECT' => ['id', 'status'],
+        'FROM' => 'glpi_tickets',
+        'WHERE' => ['id' => $ticket_ids],
+    ]);
+    foreach ($ticket_rows as $row) {
+        $ticket_status_by_id[(int) $row['id']] = (int) $row['status'];
+    }
+
+    // Batch-fetch all rooms for linked tickets (replaces N queries in the loop).
+    $rooms_by_key = [];
+    $all_rooms_ids = [];
+    $room_rows = $DB->request([
+        'SELECT' => ['id', 'tickets_id', 'room_type'],
+        'FROM' => 'glpi_plugin_glpichat_rooms',
+        'WHERE' => ['tickets_id' => $ticket_ids],
+    ]);
+    foreach ($room_rows as $row) {
+        $key = glpichat_channel_key((int) $row['tickets_id'], (string) $row['room_type']);
+        $rooms_id = (int) $row['id'];
+        $rooms_by_key[$key] = $rooms_id;
+        $all_rooms_ids[] = $rooms_id;
+    }
+
+    // Batch-fetch last message ID per room (one GROUP BY query instead of N queries).
+    $last_message_by_room = [];
+    if (count($all_rooms_ids) > 0) {
+        $msg_agg = $DB->request([
+            'SELECT' => [
+                'rooms_id',
+                QueryFunction::max('id', 'last_id'),
+            ],
+            'FROM' => 'glpi_plugin_glpichat_messages',
+            'WHERE' => ['rooms_id' => $all_rooms_ids],
+            'GROUPBY' => 'rooms_id',
         ]);
-        foreach ($ticket_rows as $row) {
-            $ticket_status_by_id[(int) $row['id']] = (int) $row['status'];
+        foreach ($msg_agg as $row) {
+            $last_message_by_room[(int) $row['rooms_id']] = (int) $row['last_id'];
+        }
+    }
+
+    // Batch-fetch active participants for this user across all rooms.
+    $participant_by_room = [];
+    if (count($all_rooms_ids) > 0) {
+        $p_rows = $DB->request([
+            'SELECT' => ['id', 'rooms_id', 'participant_type', 'users_id'],
+            'FROM' => 'glpi_plugin_glpichat_participants',
+            'WHERE' => [
+                'rooms_id' => $all_rooms_ids,
+                'users_id' => $users_id,
+                'participant_type' => GLPICHAT_ACTOR_USER,
+                'left_at' => null,
+            ],
+        ]);
+        foreach ($p_rows as $row) {
+            $participant_by_room[(int) $row['rooms_id']] = $row;
+        }
+    }
+
+    // Batch-fetch readstates for found participants.
+    $readstate_by_participant = [];
+    $participant_ids_list = array_map(static fn($p) => (int) $p['id'], $participant_by_room);
+    if (count($participant_ids_list) > 0) {
+        $rs_rows = $DB->request([
+            'SELECT' => ['participants_id', 'last_read_messages_id'],
+            'FROM' => 'glpi_plugin_glpichat_readstates',
+            'WHERE' => ['participants_id' => $participant_ids_list],
+        ]);
+        foreach ($rs_rows as $row) {
+            $readstate_by_participant[(int) $row['participants_id']] = (int) $row['last_read_messages_id'];
         }
     }
 
@@ -205,16 +275,34 @@ function glpichat_list_user_channels(int $users_id, int $focus_tickets_id): arra
                 continue;
             }
 
-            $rooms_id = glpichat_room_id((int) $tickets_id, $room_type);
-            $participants_id = glpichat_active_participant_id_for_user($rooms_id, $users_id);
+            // Use pre-fetched room_id (falls back to upsert only for newly allowed rooms).
+            $rooms_id = $rooms_by_key[$key] ?? glpichat_room_id((int) $tickets_id, $room_type);
+            $participant = $participant_by_room[$rooms_id] ?? null;
+            $participants_id = $participant !== null ? (int) $participant['id'] : 0;
+
+            // Compute unread using pre-fetched participant + readstate (1 COUNT query max per room).
+            $unread_count = 0;
+            if ($participants_id > 0 && $participant !== null) {
+                $last_read = $readstate_by_participant[$participants_id] ?? 0;
+                $where = glpichat_unread_where_for_participant($participant, $last_read);
+                $count_row = $DB->request([
+                    'COUNT' => 'cpt',
+                    'FROM' => 'glpi_plugin_glpichat_messages',
+                    'WHERE' => $where,
+                ])->current();
+                $unread_count = (int) ($count_row['cpt'] ?? 0);
+            }
+
+            $last_message_id = $last_message_by_room[$rooms_id] ?? 0;
+
             $seen[$key] = true;
             $result[] = glpichat_channel_output_row(
                 $rooms_id,
                 (int) $tickets_id,
                 $room_type,
                 $participants_id,
-                glpichat_unread_count_fast($rooms_id, $participants_id),
-                glpichat_room_last_message_id($rooms_id),
+                $unread_count,
+                $last_message_id,
                 $ticket_status_by_id[(int) $tickets_id] ?? 0
             );
         }

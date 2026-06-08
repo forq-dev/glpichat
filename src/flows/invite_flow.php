@@ -183,7 +183,7 @@ function glpichat_create_invite_use_case(
     $max_invites = glpichat_config_int('max_invites_per_ticket', 10);
     global $DB;
     $active_count_row = $DB->request([
-        'COUNT' => 'id',
+        'COUNT' => 'cpt',
         'FROM'  => 'glpi_plugin_glpichat_invites',
         'WHERE' => [
             'tickets_id'  => (int) $validated['tickets_id'],
@@ -192,7 +192,7 @@ function glpichat_create_invite_use_case(
             ['expires_at' => ['>', new \Glpi\DBAL\QueryExpression('NOW()')]],
         ],
     ])->current();
-    if ((int) ($active_count_row['COUNT'] ?? 0) >= $max_invites) {
+    if ((int) ($active_count_row['cpt'] ?? 0) >= $max_invites) {
         throw new RuntimeException('Maximum active invites per ticket reached.');
     }
 

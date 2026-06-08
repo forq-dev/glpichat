@@ -162,7 +162,7 @@ try {
 }
 
 // B-9B — IP with 0 failures: allowed
-$GLOBALS['DB'] = new ThrottleMockDB([['COUNT' => 0]]);
+$GLOBALS['DB'] = new ThrottleMockDB([['cpt' => 0]]);
 try {
     glpichat_assert_accept_not_rate_limited('10.0.0.1');
     glpichat_unit_pass('Rate limit allows request when failure count is 0');
@@ -171,7 +171,7 @@ try {
 }
 
 // B-9B — IP with 9 failures (< 10): allowed
-$GLOBALS['DB'] = new ThrottleMockDB([['COUNT' => 9]]);
+$GLOBALS['DB'] = new ThrottleMockDB([['cpt' => 9]]);
 try {
     glpichat_assert_accept_not_rate_limited('192.168.1.1');
     glpichat_unit_pass('Rate limit allows request when failure count is 9 (below threshold)');
@@ -180,7 +180,7 @@ try {
 }
 
 // B-9B — IP with exactly 10 failures: blocked (>= 10 threshold)
-$GLOBALS['DB'] = new ThrottleMockDB([['COUNT' => 10]]);
+$GLOBALS['DB'] = new ThrottleMockDB([['cpt' => 10]]);
 try {
     glpichat_assert_accept_not_rate_limited('192.168.1.1');
     glpichat_unit_fail('Rate limit must block when failure count reaches 10');
@@ -194,7 +194,7 @@ try {
 }
 
 // B-9B — IP with 47 failures (>> 10): blocked
-$GLOBALS['DB'] = new ThrottleMockDB([['COUNT' => 47]]);
+$GLOBALS['DB'] = new ThrottleMockDB([['cpt' => 47]]);
 try {
     glpichat_assert_accept_not_rate_limited('172.16.0.5');
     glpichat_unit_fail('Rate limit must block when failure count exceeds 10');

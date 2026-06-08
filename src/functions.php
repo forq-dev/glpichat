@@ -68,11 +68,38 @@ function glpichat_external_followup_user_id(): int
     return $users_id;
 }
 
-function glpichat_room_id(int $tickets_id, string $room_type): int
+/**
+ * Returns a reference to the room-id cache array shared between glpichat_room_id()
+ * and glpichat_clear_static_caches(). The static lives here so that the reset path
+ * can reach it without needing a separate variable in the main function.
+ *
+ * @internal
+ * @return array<string, int>
+ */
+function &glpichat_room_id_cache(): array
 {
     static $cache = [];
+    return $cache;
+}
 
+/**
+ * Returns a reference to the ticket cache array shared between glpichat_ticket_or_fail()
+ * and glpichat_clear_static_caches().
+ *
+ * @internal
+ * @return array<int, Ticket>
+ */
+function &glpichat_ticket_or_fail_cache(): array
+{
+    static $cache = [];
+    return $cache;
+}
+
+function glpichat_room_id(int $tickets_id, string $room_type): int
+{
+    $cache     = &glpichat_room_id_cache();
     $cache_key = $tickets_id . ':' . $room_type;
+
     if (isset($cache[$cache_key])) {
         return $cache[$cache_key];
     }
@@ -105,7 +132,7 @@ function glpichat_room_id(int $tickets_id, string $room_type): int
 
 function glpichat_ticket_or_fail(int $tickets_id): Ticket
 {
-    static $cache = [];
+    $cache = &glpichat_ticket_or_fail_cache();
 
     if (isset($cache[$tickets_id])) {
         return $cache[$tickets_id];
@@ -125,6 +152,19 @@ function glpichat_ticket_status(int $tickets_id): int
 {
     $ticket = glpichat_ticket_or_fail($tickets_id);
     return (int) ($ticket->fields['status'] ?? 0);
+}
+
+/**
+ * Reset all static caches used by glpichat_room_id() and glpichat_ticket_or_fail().
+ * Intended for use in test teardown to prevent cache leakage between test cases.
+ * Has no effect on production behaviour.
+ */
+function glpichat_clear_static_caches(): void
+{
+    $room_cache   = &glpichat_room_id_cache();
+    $ticket_cache = &glpichat_ticket_or_fail_cache();
+    $room_cache   = [];
+    $ticket_cache = [];
 }
 
 function glpichat_is_ticket_terminal_for_chat(int $tickets_id): bool

@@ -179,7 +179,7 @@ function glpichat_guest_sync_use_case(
     // For events, use joined_at as the initial cursor date when no cursor has been set yet,
     // so the SQL query already filters by date instead of discarding rows in PHP.
     $effective_event_cursor = ($last_event_id === '' || $last_event_id === '0') && $joined_at !== ''
-        ? $joined_at . '||0'
+        ? glpichat_event_cursor($joined_at, '', 0)
         : $last_event_id;
     $filtered_events = $events($rooms_id, $effective_event_cursor);
 

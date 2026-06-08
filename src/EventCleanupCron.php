@@ -24,18 +24,18 @@ final class EventCleanupCron
     public static function cronCleanEvents(CronTask $task): int
     {
         $days = glpichat_config_int('events_retention_days', 30);
-        $deleted = self::deleteExpiredEvents();
+        $deleted = self::deleteExpiredEvents($days);
         $task->addVolume($deleted);
         $task->log(sprintf('Deleted %d GLPI Chat event records older than %d days.', $deleted, $days));
 
         return $deleted > 0 ? 1 : 0;
     }
 
-    public static function deleteExpiredEvents(): int
+    public static function deleteExpiredEvents(?int $days = null): int
     {
         global $DB;
 
-        $days = glpichat_config_int('events_retention_days', 30);
+        $days = $days ?? glpichat_config_int('events_retention_days', 30);
 
         $DB->delete('glpi_plugin_glpichat_events', [
             'date_creation' => ['<', QueryFunction::dateSub(QueryFunction::now(), $days, 'DAY')],
@@ -47,18 +47,18 @@ final class EventCleanupCron
     public static function cronCleanMessages(CronTask $task): int
     {
         $days = glpichat_config_int('messages_retention_days', 365);
-        $deleted = self::deleteExpiredMessages();
+        $deleted = self::deleteExpiredMessages($days);
         $task->addVolume($deleted);
         $task->log(sprintf('Deleted %d GLPI Chat message records older than %d days.', $deleted, $days));
 
         return $deleted > 0 ? 1 : 0;
     }
 
-    public static function deleteExpiredMessages(): int
+    public static function deleteExpiredMessages(?int $days = null): int
     {
         global $DB;
 
-        $days = glpichat_config_int('messages_retention_days', 365);
+        $days = $days ?? glpichat_config_int('messages_retention_days', 365);
         $threshold = QueryFunction::dateSub(QueryFunction::now(), $days, 'DAY');
 
         $affected_rooms = $DB->request([
@@ -112,18 +112,18 @@ final class EventCleanupCron
     public static function cronCleanAuditlogs(CronTask $task): int
     {
         $days = glpichat_config_int('auditlogs_retention_days', 180);
-        $deleted = self::deleteExpiredAuditlogs();
+        $deleted = self::deleteExpiredAuditlogs($days);
         $task->addVolume($deleted);
         $task->log(sprintf('Deleted %d GLPI Chat audit log records older than %d days.', $deleted, $days));
 
         return $deleted > 0 ? 1 : 0;
     }
 
-    public static function deleteExpiredAuditlogs(): int
+    public static function deleteExpiredAuditlogs(?int $days = null): int
     {
         global $DB;
 
-        $days = glpichat_config_int('auditlogs_retention_days', 180);
+        $days = $days ?? glpichat_config_int('auditlogs_retention_days', 180);
 
         $DB->delete('glpi_plugin_glpichat_auditlogs', [
             'date_creation' => ['<', QueryFunction::dateSub(QueryFunction::now(), $days, 'DAY')],

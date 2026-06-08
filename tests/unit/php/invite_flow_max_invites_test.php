@@ -37,7 +37,7 @@ final class MaxInvitesTestDbResult
 
     public function current(): array
     {
-        return ['COUNT' => $this->count];
+        return ['cpt' => $this->count];
     }
 }
 

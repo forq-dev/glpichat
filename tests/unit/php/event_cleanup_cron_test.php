@@ -135,6 +135,72 @@ $composer_loader->addPsr4('GlpiPlugin\\Glpichat\\', dirname(__DIR__, 3) . '/src/
 
 use GlpiPlugin\Glpichat\EventCleanupCron;
 
+// ── deleteExpiredEvents — no old events (null days: reads config default) ─────
+// Scenario: calling deleteExpiredEvents() without argument triggers the
+// $days ?? glpichat_config_int(...) path. The stub returns the provided default,
+// so the DELETE is issued with the default retention value.
+
+$db_no_events = new CleanupCronMockDB([], 0);
+$GLOBALS['DB'] = $db_no_events;
+
+$events_deleted_zero = EventCleanupCron::deleteExpiredEvents();
+
+glpichat_unit_assert_same(0, $events_deleted_zero, 'deleteExpiredEvents returns 0 when no old events exist (null days arg reads config)');
+glpichat_unit_pass('deleteExpiredEvents returns 0 when no old events exist (null days arg reads config)');
+
+glpichat_unit_assert_same(1, count($db_no_events->deleted_calls), 'deleteExpiredEvents executes exactly one DELETE when called without argument');
+glpichat_unit_pass('deleteExpiredEvents executes exactly one DELETE when called without argument');
+
+glpichat_unit_assert_same('glpi_plugin_glpichat_events', (string) $db_no_events->deleted_calls[0]['table'], 'deleteExpiredEvents targets the events table');
+glpichat_unit_pass('deleteExpiredEvents targets the events table');
+
+// ── deleteExpiredEvents — with explicit days argument ─────────────────────────
+
+$db_with_events = new CleanupCronMockDB([], 5);
+$GLOBALS['DB'] = $db_with_events;
+
+$events_deleted = EventCleanupCron::deleteExpiredEvents(30);
+
+glpichat_unit_assert_same(5, $events_deleted, 'deleteExpiredEvents returns affectedRows when old events exist and days is explicit');
+glpichat_unit_pass('deleteExpiredEvents returns affectedRows when old events exist and days is explicit');
+
+glpichat_unit_assert_same(0, count($db_with_events->inserted_calls), 'deleteExpiredEvents never inserts events');
+glpichat_unit_pass('deleteExpiredEvents never inserts events');
+
+// ── cronCleanEvents — addVolume and log are called ───────────────────────────
+
+$db_cron_events = new CleanupCronMockDB([], 3);
+$GLOBALS['DB'] = $db_cron_events;
+
+$task_events = new CronTask();
+$cron_result_events = EventCleanupCron::cronCleanEvents($task_events);
+
+glpichat_unit_assert_same(1, $cron_result_events, 'cronCleanEvents returns 1 when events were deleted');
+glpichat_unit_pass('cronCleanEvents returns 1 when events were deleted');
+
+glpichat_unit_assert_same(1, count($task_events->added_volumes), 'cronCleanEvents calls addVolume exactly once');
+glpichat_unit_pass('cronCleanEvents calls addVolume exactly once');
+
+glpichat_unit_assert_same(3, (int) $task_events->added_volumes[0], 'cronCleanEvents passes the deleted count to addVolume');
+glpichat_unit_pass('cronCleanEvents passes the deleted count to addVolume');
+
+glpichat_unit_assert_same(1, count($task_events->logged_messages), 'cronCleanEvents calls log exactly once');
+glpichat_unit_pass('cronCleanEvents calls log exactly once');
+
+glpichat_unit_assert_true(str_contains($task_events->logged_messages[0], '3'), 'cronCleanEvents log message mentions the deleted count');
+glpichat_unit_pass('cronCleanEvents log message mentions the deleted count');
+
+// cronCleanEvents returns 0 when nothing was deleted
+
+$db_cron_events_zero = new CleanupCronMockDB([], 0);
+$GLOBALS['DB'] = $db_cron_events_zero;
+
+$task_events_zero = new CronTask();
+$cron_result_events_zero = EventCleanupCron::cronCleanEvents($task_events_zero);
+
+glpichat_unit_assert_same(0, $cron_result_events_zero, 'cronCleanEvents returns 0 when no events were deleted');
+glpichat_unit_pass('cronCleanEvents returns 0 when no events were deleted');
+
 // ── deleteExpiredMessages — no old messages ───────────────────────────────────
 // Scenario 1: SELECT returns no affected rooms → 0 count, no event inserted.
 

@@ -316,7 +316,7 @@ function glpichat_assert_accept_not_rate_limited(string $ip): void
     $count    = 0;
     if (isset($DB) && $DB->tableExists('glpi_plugin_glpichat_auditlogs')) {
         $row = $DB->request([
-            'COUNT' => 'id',
+            'COUNT' => 'cpt',
             'FROM'  => 'glpi_plugin_glpichat_auditlogs',
             'WHERE' => [
                 'action'         => 'guest_accept_failed',
@@ -324,7 +324,7 @@ function glpichat_assert_accept_not_rate_limited(string $ip): void
                 ['payload_json'  => ['LIKE', '%' . $ip_hash . '%']],
             ],
         ])->current();
-        $count = (int) ($row['COUNT'] ?? 0);
+        $count = (int) ($row['cpt'] ?? 0);
     }
     if ($count >= glpichat_config_int('accept_rate_limit_max_attempts', 10)) {
         throw new RuntimeException('Too many attempts. Try again later.', 429);

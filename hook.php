@@ -36,10 +36,12 @@ function plugin_glpichat_install(): bool
 
     glpichat_add_profile_rights();
 
-    // Helper: preserve existing value or set default
+    // Helper: preserve existing value if non-empty, otherwise use the provided default.
+    // A stored value of '0' is valid (e.g. auto_open_ticket_chat = '0' means disabled)
+    // and is correctly preserved because '0' !== ''.
     $cfg_default = static function (string $key, string $default): string {
         $v = (string) Config::getConfigurationValue('plugin:glpichat', $key);
-        return ($v !== '' && $v !== '0' || $key === 'external_followup_user_id' || $key === 'auto_open_ticket_chat') ? ($v !== '' ? $v : $default) : $default;
+        return $v !== '' ? $v : $default;
     };
 
     Config::setConfigurationValues('plugin:glpichat', [

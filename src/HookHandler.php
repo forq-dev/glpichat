@@ -17,14 +17,10 @@ use Session;
 use Ticket;
 
 use function glpichat_add_message;
-use function glpichat_can_user_read_notification_room;
-use function glpichat_display_unread_count;
 use function glpichat_is_ticket_terminal_status;
 use function glpichat_latest_message_for_room;
-use function glpichat_notification_message_data;
 use function glpichat_record_event;
 use function glpichat_room_id;
-use function glpichat_unread_count_for_user_room;
 
 require_once __DIR__ . '/flows/notification_flow.php';
 
@@ -45,6 +41,8 @@ final class HookHandler
         $target->events['glpichat_guest_joined'] = __('GLPI CHAT: convidado entrou no chat');
         $target->events['glpichat_guest_left'] = __('GLPI CHAT: convidado saiu do chat');
         $target->events['glpichat_guest_left_timeout'] = __('GLPI CHAT: sessao do convidado expirou');
+        $target->events['glpichat_user_joined'] = __('GLPI CHAT: usuario entrou no chat');
+        $target->events['glpichat_user_left'] = __('GLPI CHAT: usuario saiu do chat');
     }
 
     public static function itemGetDatas(mixed $target): void
@@ -56,6 +54,8 @@ final class HookHandler
             'glpichat_guest_joined' => 'Convidado entrou no chat',
             'glpichat_guest_left' => 'Convidado saiu do chat',
             'glpichat_guest_left_timeout' => 'Sessao do convidado expirou',
+            'glpichat_user_joined' => 'Usuario entrou no chat',
+            'glpichat_user_left' => 'Usuario saiu do chat',
         ];
 
         $channel_type_map = [
@@ -68,7 +68,7 @@ final class HookHandler
         }
 
         $event = (string) ($target->raiseevent ?? '');
-        if (!in_array($event, ['glpichat_public_message', 'glpichat_internal_message', 'glpichat_guest_message', 'glpichat_guest_joined', 'glpichat_guest_left', 'glpichat_guest_left_timeout'], true)) {
+        if (!in_array($event, ['glpichat_public_message', 'glpichat_internal_message', 'glpichat_guest_message', 'glpichat_guest_joined', 'glpichat_guest_left', 'glpichat_guest_left_timeout', 'glpichat_user_joined', 'glpichat_user_left'], true)) {
             return;
         }
 
@@ -82,7 +82,7 @@ final class HookHandler
             $target->data['##glpichat.event_action##'] = $event_action_map[$event];
             $target->data['##glpichat.sender_name##'] = $guest_name;
             $target->data['##glpichat.guest_name##'] = $guest_name;
-            $target->data['##glpichat.message_preview##'] = '';
+            $target->data['##glpichat.message_preview##'] = 'entrou no chat';
             $target->data['##glpichat.channel_type##'] = '';
             $target->data['##glpichat.unread_count##'] = '0';
             $target->data['##glpichat.unread_badge##'] = '';
@@ -94,7 +94,7 @@ final class HookHandler
             $target->data['##glpichat.event_action##'] = $event_action_map[$event];
             $target->data['##glpichat.sender_name##'] = $guest_name;
             $target->data['##glpichat.guest_name##'] = $guest_name;
-            $target->data['##glpichat.message_preview##'] = '';
+            $target->data['##glpichat.message_preview##'] = 'saiu do chat';
             $target->data['##glpichat.channel_type##'] = '';
             $target->data['##glpichat.unread_count##'] = '0';
             $target->data['##glpichat.unread_badge##'] = '';
@@ -106,6 +106,47 @@ final class HookHandler
             $target->data['##glpichat.event_action##'] = $event_action_map[$event];
             $target->data['##glpichat.sender_name##'] = $guest_name;
             $target->data['##glpichat.guest_name##'] = $guest_name;
+            $target->data['##glpichat.message_preview##'] = 'sessão expirou por inatividade';
+            $target->data['##glpichat.channel_type##'] = '';
+            $target->data['##glpichat.unread_count##'] = '0';
+            $target->data['##glpichat.unread_badge##'] = '';
+            return;
+        }
+
+        if ($event === 'glpichat_user_joined') {
+            $user_name = (string) ($target->options['glpichat_user_name'] ?? 'Usuário');
+            $target->data['##glpichat.event_action##'] = $event_action_map[$event];
+            $target->data['##glpichat.sender_name##'] = $user_name;
+            $target->data['##glpichat.guest_name##'] = '';
+            $target->data['##glpichat.message_preview##'] = 'entrou no chat';
+            $target->data['##glpichat.channel_type##'] = '';
+            $target->data['##glpichat.unread_count##'] = '0';
+            $target->data['##glpichat.unread_badge##'] = '';
+            return;
+        }
+
+        if ($event === 'glpichat_user_left') {
+            $user_name = (string) ($target->options['glpichat_user_name'] ?? 'Usuário');
+            $target->data['##glpichat.event_action##'] = $event_action_map[$event];
+            $target->data['##glpichat.sender_name##'] = $user_name;
+            $target->data['##glpichat.guest_name##'] = '';
+            $target->data['##glpichat.message_preview##'] = 'saiu do chat';
+            $target->data['##glpichat.channel_type##'] = '';
+            $target->data['##glpichat.unread_count##'] = '0';
+            $target->data['##glpichat.unread_badge##'] = '';
+            return;
+        }
+
+        // GLPI's ITEM_GET_DATA hook does not populate recipient_data with the
+        // current user ID in the standard NotificationTarget flow, so per-recipient
+        // authorization cannot be checked here. Authorization is already enforced
+        // by the ADD_RECIPIENT_TO_TARGET hook (filterInternalMessageTargets), which
+        // removes unauthorized recipients before this hook fires.
+        $room_type_for_event = glpichat_notification_room_type($event);
+        if ($room_type_for_event === null) {
+            $target->data['##glpichat.event_action##'] = '';
+            $target->data['##glpichat.sender_name##'] = '';
+            $target->data['##glpichat.guest_name##'] = '';
             $target->data['##glpichat.message_preview##'] = '';
             $target->data['##glpichat.channel_type##'] = '';
             $target->data['##glpichat.unread_count##'] = '0';
@@ -113,28 +154,16 @@ final class HookHandler
             return;
         }
 
-        $recipient = $target->recipient_data;
-        $users_id = (int) ($recipient['items_id'] ?? 0);
-        $message_data = glpichat_notification_message_data(
-            $event,
-            (int) $ticket->getID(),
-            $users_id,
-            'glpichat_room_id',
-            'glpichat_can_user_read_notification_room',
-            'glpichat_latest_message_for_room',
-            'glpichat_unread_count_for_user_room',
-            'glpichat_display_unread_count'
-        );
+        $rooms_id = (int) glpichat_room_id((int) $ticket->getID(), $room_type_for_event);
+        $message = glpichat_latest_message_for_room($rooms_id);
 
-        $room_type = (string) ($target->options['glpichat_room_type'] ?? '');
-        $is_authorized = (bool) ($message_data['authorized'] ?? false);
-        $target->data['##glpichat.event_action##'] = $is_authorized ? ($event_action_map[$event] ?? '') : '';
-        $target->data['##glpichat.sender_name##'] = $message_data['sender_name'];
+        $target->data['##glpichat.event_action##'] = $event_action_map[$event] ?? '';
+        $target->data['##glpichat.sender_name##'] = (string) ($message['sender_name'] ?? 'Sistema');
         $target->data['##glpichat.guest_name##'] = '';
-        $target->data['##glpichat.message_preview##'] = $message_data['preview'];
-        $target->data['##glpichat.channel_type##'] = $is_authorized ? ($channel_type_map[$room_type] ?? '') : '';
-        $target->data['##glpichat.unread_count##'] = $message_data['unread_count'];
-        $target->data['##glpichat.unread_badge##'] = $message_data['unread_badge'];
+        $target->data['##glpichat.message_preview##'] = (string) ($message['preview'] ?? '');
+        $target->data['##glpichat.channel_type##'] = $channel_type_map[$room_type_for_event] ?? '';
+        $target->data['##glpichat.unread_count##'] = '0';
+        $target->data['##glpichat.unread_badge##'] = '';
     }
 
     /**

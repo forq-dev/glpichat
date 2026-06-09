@@ -225,7 +225,7 @@ import {
     panel._cancelClose = cleanup;
     
     panel.addEventListener("animationend", onEnd);
-    timeoutId = setTimeout(onEnd, 150);
+    timeoutId = setTimeout(onEnd, 250);
   };
 
 
@@ -1232,7 +1232,7 @@ import {
       }
     } else {
       empty.hidden = true;
-      if (channel && !channel.renderedMessageIds) {
+      if (channel && (!channel.renderedMessageIds || !Array.isArray(channel.renderedMessageIdsOrder))) {
         channel.renderedMessageIds = new Set();
         channel.renderedMessageIdsOrder = [];
       }
@@ -1319,8 +1319,8 @@ import {
         messagesNode.appendChild(item);
       }
       const messages = Array.isArray(channel?.messages) ? channel.messages : [];
-      const lastId = Number(messages.at(-1).id || 0);
-      if (channel && lastId > 0) {
+      const lastId = Number(messages.at(-1)?.id || 0);
+      if (channel && lastId > 0 && wasNearBottom) {
         markRead(channel.rooms_id, lastId).catch(console.error);
       }
     }
@@ -1642,11 +1642,15 @@ import {
       const badges = [];
       if (ticket.channels.public) {
         const publicUnread = Number(state.channels.get(ticket.channels.public)?.unread_count || 0);
-        badges.push(`<i class="glpichat-notification-badge glpichat-notification-badge-public" title="Solicitante">${sanitize(publicUnread)}</i>`);
+        if (publicUnread > 0) {
+          badges.push(`<i class="glpichat-notification-badge glpichat-notification-badge-public" title="Solicitante">${sanitize(publicUnread)}</i>`);
+        }
       }
       if (ticket.channels.internal) {
         const internalUnread = Number(state.channels.get(ticket.channels.internal)?.unread_count || 0);
-        badges.push(`<i class="glpichat-notification-badge glpichat-notification-badge-internal" title="Discussão técnica">${sanitize(internalUnread)}</i>`);
+        if (internalUnread > 0) {
+          badges.push(`<i class="glpichat-notification-badge glpichat-notification-badge-internal" title="Discussão técnica">${sanitize(internalUnread)}</i>`);
+        }
       }
       const badgesHtml = badges.length > 0
         ? `<span class="glpichat-notification-badges">${badges.join("")}</span>`

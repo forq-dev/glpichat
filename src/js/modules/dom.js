@@ -57,6 +57,9 @@ export const detectBottomObstruction = () => {
     if (rect.height <= 0 || rect.width <= 0) {
       continue;
     }
+    if (rect.height > rect.width) {
+      continue;
+    }
     if (rect.bottom < viewportHeight - 2) {
       continue;
     }
@@ -101,6 +104,9 @@ export const detectTopObstruction = () => {
     }
     const rect = element.getBoundingClientRect();
     if (rect.height <= 0 || rect.width <= 0) {
+      continue;
+    }
+    if (rect.height > rect.width) {
       continue;
     }
     if (rect.top > 2) {

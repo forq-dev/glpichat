@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 use Glpi\DBAL\QueryExpression;
 
-const GLPICHAT_RIGHTS_MODEL_VERSION = '7';
+const GLPICHAT_RIGHTS_MODEL_VERSION = '9';
 
 function glpichat_add_profile_rights(): void
 {
@@ -519,9 +519,81 @@ function glpichat_index_columns(string $table, string $index): array
 
 function glpichat_install_default_notifications(): void
 {
-    $template_id = glpichat_ensure_default_notification_template();
+    $message_template_id = glpichat_ensure_default_notification_template();
+    $event_template_id   = glpichat_ensure_event_notification_template();
+    $event_events        = glpichat_event_notification_events();
+
     foreach (glpichat_default_notification_events() as $event) {
+        $template_id = in_array($event, $event_events, true)
+            ? $event_template_id
+            : $message_template_id;
         glpichat_ensure_default_notification_definition($template_id, $event);
+    }
+}
+
+function glpichat_ensure_event_notification_template(): int
+{
+    $template = new NotificationTemplate();
+    $existing = $template->find([
+        'name' => glpichat_event_notification_template_name(),
+        'itemtype' => Ticket::class,
+    ]);
+
+    if (is_array($existing) && count($existing) > 0) {
+        $row = reset($existing);
+        $template_id = (int) ($row['id'] ?? 0);
+        if ($template_id <= 0) {
+            throw new RuntimeException('Invalid existing event notification template id.');
+        }
+        glpichat_upsert_event_notification_template_translation($template_id);
+        return $template_id;
+    }
+
+    $template_id = (int) $template->add([
+        'name' => glpichat_event_notification_template_name(),
+        'itemtype' => Ticket::class,
+        'comment' => 'GLPI Chat event notification template (join/leave)',
+    ]);
+    if ($template_id <= 0) {
+        throw new RuntimeException('Unable to create event GLPI Chat notification template.');
+    }
+
+    glpichat_upsert_event_notification_template_translation($template_id);
+    return $template_id;
+}
+
+function glpichat_upsert_event_notification_template_translation(int $template_id): void
+{
+    $translation = new NotificationTemplateTranslation();
+    $existing = $translation->find([
+        'notificationtemplates_id' => $template_id,
+        'language' => '',
+    ]);
+
+    $input = [
+        'notificationtemplates_id' => $template_id,
+        'language' => '',
+        'subject' => glpichat_default_template_subject(),
+        'content_text' => glpichat_event_template_text(),
+        'content_html' => glpichat_event_template_html(),
+    ];
+
+    if (is_array($existing) && count($existing) > 0) {
+        $row = reset($existing);
+        $translation_id = (int) ($row['id'] ?? 0);
+        if ($translation_id <= 0) {
+            throw new RuntimeException('Invalid existing event notification template translation id.');
+        }
+        $input['id'] = $translation_id;
+        if (!$translation->update($input)) {
+            throw new RuntimeException('Unable to update event GLPI Chat template translation.');
+        }
+        return;
+    }
+
+    $translation_id = (int) $translation->add($input);
+    if ($translation_id <= 0) {
+        throw new RuntimeException('Unable to create event GLPI Chat template translation.');
     }
 }
 
@@ -673,6 +745,7 @@ function glpichat_ensure_default_notification_targets(int $notification_id): voi
         Notification::ASSIGN_GROUP,
         Notification::OBSERVER,
         Notification::OBSERVER_GROUP,
+        Notification::AUTHOR,
     ];
 
     foreach ($default_targets as $items_id) {

@@ -363,6 +363,10 @@ function glpichat_participant_id_for_user(int $rooms_id, int $users_id): int
                 'user_name' => $user_name,
             ]
         );
+
+        if ($tickets_id > 0) {
+            glpichat_raise_user_joined_notification_event($tickets_id, $user_name);
+        }
     } catch (\Throwable $e) {
         // Ignorar falha silenciosamente caso ocorra em contexto de setup de salas
     }
@@ -431,6 +435,10 @@ function glpichat_disconnect_user_participant(int $rooms_id, int $users_id): voi
                 'user_name' => $user_name,
             ]
         );
+
+        if ($tickets_id > 0) {
+            glpichat_raise_user_left_notification_event($tickets_id, $user_name);
+        }
     } catch (\Throwable $e) {
         // Ignorar silenciosamente se a sala já tiver sido removida
     }
@@ -481,6 +489,10 @@ function glpichat_expire_inactive_user_participants(): void
                     'user_name' => $user_name,
                 ]
             );
+
+            if ($tickets_id > 0) {
+                glpichat_raise_user_left_notification_event($tickets_id, $user_name);
+            }
         } catch (\Throwable $e) {
             // Ignorar silenciosamente falhas de sala inexistente durante expiração
         }
@@ -600,7 +612,7 @@ function glpichat_raise_guest_joined_notification_event(int $tickets_id, string 
     ];
 
     if (!NotificationEvent::raiseEvent($event, $ticket, $options)) {
-        throw new RuntimeException(sprintf('Unable to raise GLPI notification event "%s".', $event));
+        trigger_error(sprintf('Unable to raise GLPI notification event "%s".', $event), E_USER_WARNING);
     }
 }
 
@@ -615,7 +627,7 @@ function glpichat_raise_guest_left_notification_event(int $tickets_id, string $g
     ];
 
     if (!NotificationEvent::raiseEvent($event, $ticket, $options)) {
-        throw new RuntimeException(sprintf('Unable to raise GLPI notification event "%s".', $event));
+        trigger_error(sprintf('Unable to raise GLPI notification event "%s".', $event), E_USER_WARNING);
     }
 }
 
@@ -630,7 +642,37 @@ function glpichat_raise_guest_left_timeout_notification_event(int $tickets_id, s
     ];
 
     if (!NotificationEvent::raiseEvent($event, $ticket, $options)) {
-        throw new RuntimeException(sprintf('Unable to raise GLPI notification event "%s".', $event));
+        trigger_error(sprintf('Unable to raise GLPI notification event "%s".', $event), E_USER_WARNING);
+    }
+}
+
+function glpichat_raise_user_joined_notification_event(int $tickets_id, string $user_name): void
+{
+    $ticket = glpichat_ticket_or_fail($tickets_id);
+
+    $event = 'glpichat_user_joined';
+
+    $options = [
+        'glpichat_user_name' => $user_name,
+    ];
+
+    if (!NotificationEvent::raiseEvent($event, $ticket, $options)) {
+        trigger_error(sprintf('Unable to raise GLPI notification event "%s".', $event), E_USER_WARNING);
+    }
+}
+
+function glpichat_raise_user_left_notification_event(int $tickets_id, string $user_name): void
+{
+    $ticket = glpichat_ticket_or_fail($tickets_id);
+
+    $event = 'glpichat_user_left';
+
+    $options = [
+        'glpichat_user_name' => $user_name,
+    ];
+
+    if (!NotificationEvent::raiseEvent($event, $ticket, $options)) {
+        trigger_error(sprintf('Unable to raise GLPI notification event "%s".', $event), E_USER_WARNING);
     }
 }
 

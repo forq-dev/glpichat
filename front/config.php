@@ -98,176 +98,418 @@ $auditlogs_retention_days = max(30, min(730, (int)$cfg('auditlogs_retention_days
 // Outros
 $external_followup_user_id = (int)$cfg('external_followup_user_id', 0);
 
-echo "<div class='container' style='max-width: 900px; margin-top: 20px;'>";
-echo "<form method='post' action='" . htmlspecialchars($_SERVER['PHP_SELF']) . "'>";
+echo "<div class='container-xl py-3'>";
+echo "<form method='post' action='" . htmlspecialchars($_SERVER['PHP_SELF']) . "' id='glpichat-config-form'>";
 echo Html::hidden('_glpi_csrf_token', ['value' => Session::getNewCSRFToken()]);
 
-// ── Bloco A — Polling & Sincronização ──────────────────────────────────────
-echo "<div class='card mb-4'>";
-echo "  <div class='card-header'><strong>" . __("Bloco A — Polling & Sincronização", "glpichat") . "</strong></div>";
-echo "  <div class='card-body'>";
+// ── Nav Tabs ──────────────────────────────────────────────────────────────
+echo "<ul class='nav nav-tabs mb-3' id='glpichat-config-tabs' role='tablist'>";
 
-$fields_a = [
-    ['poll_focused_ms',        $poll_focused_ms,           __("Poll em foco (ms)", "glpichat"),                    __("Intervalo de polling quando a aba está ativa e em foco.", "glpichat"),            1000, 30000],
-    ['poll_idle_ms',           $poll_idle_ms,              __("Poll em idle (ms)", "glpichat"),                    __("Intervalo de polling quando a aba está visível mas sem foco.", "glpichat"),       3000, 60000],
-    ['poll_bg_ms',             $poll_bg_ms,                __("Poll em background (ms)", "glpichat"),              __("Intervalo de polling quando a aba está em background/oculta.", "glpichat"),      5000, 120000],
-    ['guest_poll_ms',          $guest_poll_ms,             __("Poll de convidados (ms)", "glpichat"),              __("Intervalo de polling para a interface do convidado externo.", "glpichat"),       2000, 30000],
-    ['meta_sync_ms',           $meta_sync_ms,              __("Sincronização de metadados (ms)", "glpichat"),      __("Intervalo de sincronização de metadados do widget.", "glpichat"),               5000, 120000],
-    ['invite_poll_ms',         $invite_poll_ms,            __("Poll de gerenciamento de convites (ms)", "glpichat"), __("Intervalo de atualização da tabela de gestão de convites.", "glpichat"),     3000, 60000],
-    ['poll_max_channels',      $poll_max_channels,         __("Máximo de canais por poll", "glpichat"),            __("Limite de canais processados por requisição de polling.", "glpichat"),          1, 50],
-    ['user_inactivity_timeout_s', $user_inactivity_timeout_s, __("Timeout de inatividade de usuário (s)", "glpichat"), __("Segundos sem atividade antes de remover participante da sala.", "glpichat"), 30, 600],
+$tabs = [
+    ['id' => 'tab-sync',       'label' => __('Sincronização', 'glpichat'),  'icon' => 'ti ti-refresh'],
+    ['id' => 'tab-seguranca',  'label' => __('Segurança', 'glpichat'),      'icon' => 'ti ti-shield-lock'],
+    ['id' => 'tab-interface',  'label' => __('Interface', 'glpichat'),      'icon' => 'ti ti-adjustments'],
+    ['id' => 'tab-chat',       'label' => __('Chat', 'glpichat'),           'icon' => 'ti ti-message-circle'],
+    ['id' => 'tab-retencao',   'label' => __('Retenção', 'glpichat'),       'icon' => 'ti ti-trash'],
+    ['id' => 'tab-integracao', 'label' => __('Integração', 'glpichat'),     'icon' => 'ti ti-plug'],
 ];
-foreach ($fields_a as [$name, $value, $label, $help, $min, $max]) {
-    echo "    <div class='mb-3'>";
-    echo "      <label class='form-label' for='" . htmlspecialchars($name) . "'>" . htmlspecialchars($label) . "</label>";
-    echo "      <input type='number' min='{$min}' max='{$max}' name='" . htmlspecialchars($name) . "' id='" . htmlspecialchars($name) . "' class='form-control' value='" . (int)$value . "' required>";
-    echo "      <div class='form-text text-muted'>" . htmlspecialchars($help) . "</div>";
-    echo "    </div>";
+
+foreach ($tabs as $i => $tab) {
+    $active_class = $i === 0 ? ' active' : '';
+    echo "<li class='nav-item' role='presentation'>";
+    echo "  <a class='nav-link{$active_class}' id='{$tab['id']}-link' data-bs-toggle='tab' href='#{$tab['id']}' role='tab' aria-controls='{$tab['id']}' aria-selected='" . ($i === 0 ? 'true' : 'false') . "'>";
+    echo "    <i class='{$tab['icon']} me-1'></i>" . htmlspecialchars($tab['label']);
+    echo "  </a>";
+    echo "</li>";
 }
 
-echo "  </div>";
-echo "</div>";
+echo "</ul>";
 
-// ── Bloco B — Sessão & Segurança ──────────────────────────────────────────
-echo "<div class='card mb-4'>";
-echo "  <div class='card-header'><strong>" . __("Bloco B — Sessão & Segurança", "glpichat") . "</strong></div>";
-echo "  <div class='card-body'>";
+// ── Tab Content ───────────────────────────────────────────────────────────
+echo "<div class='tab-content' id='glpichat-config-tabs-content'>";
 
-$fields_b = [
-    ['guest_session_ttl',              $guest_session_ttl,              __("TTL da sessão de convidados (s)", "glpichat"),           __("Tempo que a sessão do convidado externo permanece ativa sem interações.", "glpichat"),    60, 86400],
-    ['invite_ttl_seconds',             $invite_ttl_seconds,             __("TTL do convite (s)", "glpichat"),                        __("Validade do link de convite gerado.", "glpichat"),                                         300, 259200],
-    ['guest_send_throttle_s',          $guest_send_throttle_s,          __("Throttle de envio por convidado (s)", "glpichat"),       __("Intervalo mínimo entre mensagens enviadas por um convidado.", "glpichat"),                 1, 30],
-    ['accept_rate_limit_window_s',     $accept_rate_limit_window_s,     __("Janela do rate limit de aceitação (s)", "glpichat"),     __("Janela de tempo para contagem de tentativas de aceitar convite.", "glpichat"),             30, 300],
-    ['accept_rate_limit_max_attempts', $accept_rate_limit_max_attempts, __("Máximo de tentativas de aceitação", "glpichat"),        __("Número máximo de tentativas de aceitar convite na janela configurada.", "glpichat"),       3, 100],
-    ['max_invites_per_ticket',         $max_invites_per_ticket,         __("Máximo de convites ativos por chamado", "glpichat"),     __("Limite de convites ativos simultâneos por chamado.", "glpichat"),                          1, 50],
+// ── Tab: Sincronização ────────────────────────────────────────────────────
+echo "<div class='tab-pane fade show active' id='tab-sync' role='tabpanel' aria-labelledby='tab-sync-link'>";
+echo "  <div class='row g-3'>";
+
+$sync_col1 = [
+    ['poll_focused_ms', $poll_focused_ms, __('Poll em foco (ms)', 'glpichat'), __('Intervalo em ms entre polls quando o chat está aberto e visível. Valores menores = mensagens mais rápidas, porém mais carga no servidor. Recomendado: 2500ms para instâncias médias.', 'glpichat'), 1000, 30000],
+    ['poll_idle_ms',    $poll_idle_ms,    __('Poll em idle (ms)', 'glpichat'),  __('Intervalo em ms quando a janela do GLPI está visível mas nenhum chat está aberto. Aumentar reduz carga sem impactar a experiência.', 'glpichat'), 3000, 60000],
+    ['poll_bg_ms',      $poll_bg_ms,      __('Poll em background (ms)', 'glpichat'), __('Intervalo em ms quando a aba do GLPI está em background (usuário em outra aba). Mínimo recomendado: 15000ms.', 'glpichat'), 5000, 120000],
+    ['guest_poll_ms',   $guest_poll_ms,   __('Poll de convidados (ms)', 'glpichat'), __('Intervalo em ms entre sincronizações do convidado externo. Cada guest ativo com esse intervalo gera carga contínua no servidor.', 'glpichat'), 2000, 30000],
 ];
-foreach ($fields_b as [$name, $value, $label, $help, $min, $max]) {
-    echo "    <div class='mb-3'>";
-    echo "      <label class='form-label' for='" . htmlspecialchars($name) . "'>" . htmlspecialchars($label) . "</label>";
-    echo "      <input type='number' min='{$min}' max='{$max}' name='" . htmlspecialchars($name) . "' id='" . htmlspecialchars($name) . "' class='form-control' value='" . (int)$value . "' required>";
-    echo "      <div class='form-text text-muted'>" . htmlspecialchars($help) . "</div>";
-    echo "    </div>";
+$sync_col2 = [
+    ['meta_sync_ms',              $meta_sync_ms,              __('Sincronização de metadados (ms)', 'glpichat'),      __('Intervalo em ms para atualizar metadados de canais (não lidos, participantes). Menos crítico que o poll principal.', 'glpichat'), 5000, 120000],
+    ['invite_poll_ms',            $invite_poll_ms,            __('Poll de convites (ms)', 'glpichat'),                __('Intervalo em ms para auto-atualizar a lista de convites na aba de gestão de chamados.', 'glpichat'), 3000, 60000],
+    ['poll_max_channels',         $poll_max_channels,         __('Máximo de canais por poll', 'glpichat'),            __('Máximo de canais processados por chamada de poll. Limita o pior caso de queries por request (aprox. 4-5 queries por canal).', 'glpichat'), 1, 50],
+    ['user_inactivity_timeout_s', $user_inactivity_timeout_s, __('Timeout de inatividade (s)', 'glpichat'),           __('Segundos sem atividade para considerar um usuário como desconectado da sala e gerar evento de saída.', 'glpichat'), 30, 600],
+];
+
+echo "    <div class='col-md-6'>";
+foreach ($sync_col1 as [$name, $value, $label, $help, $min, $max]) {
+    echo "      <div class='mb-3'>";
+    echo "        <label class='form-label fw-semibold' for='" . htmlspecialchars($name) . "'>" . htmlspecialchars($label) . "</label>";
+    echo "        <input type='number' min='{$min}' max='{$max}' name='" . htmlspecialchars($name) . "' id='" . htmlspecialchars($name) . "' class='form-control' value='" . (int)$value . "' required>";
+    echo "        <div class='form-text'>" . htmlspecialchars($help) . "</div>";
+    echo "      </div>";
 }
-
-echo "  </div>";
-echo "</div>";
-
-// ── Bloco C — Interface & UX ──────────────────────────────────────────────
-echo "<div class='card mb-4'>";
-echo "  <div class='card-header'><strong>" . __("Bloco C — Interface & UX", "glpichat") . "</strong></div>";
-echo "  <div class='card-body'>";
-
-echo "    <div class='mb-3'>";
-echo "      <label class='form-label' for='desktop_max_open'>" . __("Máximo de chats abertos no desktop", "glpichat") . "</label>";
-echo "      <input type='number' min='1' max='10' name='desktop_max_open' id='desktop_max_open' class='form-control' value='" . (int)$desktop_max_open . "' required>";
-echo "      <div class='form-text text-muted'>" . __("Número máximo de janelas de chat abertas simultaneamente no widget desktop.", "glpichat") . "</div>";
 echo "    </div>";
 
-echo "    <div class='mb-3'>";
-echo "      <label class='form-label' for='widget_default_position'>" . __("Posição padrão do widget", "glpichat") . "</label>";
-echo "      <select name='widget_default_position' id='widget_default_position' class='form-control'>";
+echo "    <div class='col-md-6'>";
+foreach ($sync_col2 as [$name, $value, $label, $help, $min, $max]) {
+    echo "      <div class='mb-3'>";
+    echo "        <label class='form-label fw-semibold' for='" . htmlspecialchars($name) . "'>" . htmlspecialchars($label) . "</label>";
+    echo "        <input type='number' min='{$min}' max='{$max}' name='" . htmlspecialchars($name) . "' id='" . htmlspecialchars($name) . "' class='form-control' value='" . (int)$value . "' required>";
+    echo "        <div class='form-text'>" . htmlspecialchars($help) . "</div>";
+    echo "      </div>";
+}
+echo "    </div>";
+
+echo "  </div>";
+if (Session::haveRight("plugin_glpichat_admin", UPDATE)) {
+    echo "  <div class='mt-2 text-end'>";
+    echo "    <button type='submit' name='update' class='btn btn-primary'><i class='ti ti-device-floppy me-1'></i>" . __('Salvar', 'glpichat') . "</button>";
+    echo "  </div>";
+}
+echo "</div>";
+
+// ── Tab: Segurança ────────────────────────────────────────────────────────
+echo "<div class='tab-pane fade' id='tab-seguranca' role='tabpanel' aria-labelledby='tab-seguranca-link'>";
+echo "  <div class='row g-3'>";
+
+$seg_col1 = [
+    ['guest_session_ttl',          $guest_session_ttl,          __('TTL da sessão de convidados (s)', 'glpichat'),        __('Tempo máximo em segundos que um convidado externo permanece ativo sem enviar mensagens ou heartbeat.', 'glpichat'), 60, 86400],
+    ['invite_ttl_seconds',         $invite_ttl_seconds,         __('Validade do convite (s)', 'glpichat'),                __('Validade do link de convite enviado por e-mail. Após este prazo o link expira e um novo convite deve ser gerado.', 'glpichat'), 300, 259200],
+    ['guest_send_throttle_s',      $guest_send_throttle_s,      __('Throttle de envio por convidado (s)', 'glpichat'),    __('Intervalo mínimo em segundos entre mensagens consecutivas de um mesmo convidado. Previne flooding.', 'glpichat'), 1, 30],
+];
+$seg_col2 = [
+    ['accept_rate_limit_window_s',     $accept_rate_limit_window_s,     __('Janela do rate limit de aceitação (s)', 'glpichat'), __('Janela de tempo em segundos para contagem de tentativas de aceitação de convite por IP.', 'glpichat'), 30, 300],
+    ['accept_rate_limit_max_attempts', $accept_rate_limit_max_attempts, __('Máximo de tentativas de aceitação', 'glpichat'),     __('Máximo de tentativas de aceitação de convite por IP dentro da janela configurada acima.', 'glpichat'), 3, 100],
+    ['max_invites_per_ticket',         $max_invites_per_ticket,         __('Máximo de convites por chamado', 'glpichat'),        __('Limite de convites ativos simultâneos por chamado. Previne acúmulo de links válidos pendentes.', 'glpichat'), 1, 50],
+];
+
+echo "    <div class='col-md-6'>";
+foreach ($seg_col1 as [$name, $value, $label, $help, $min, $max]) {
+    echo "      <div class='mb-3'>";
+    echo "        <label class='form-label fw-semibold' for='" . htmlspecialchars($name) . "'>" . htmlspecialchars($label) . "</label>";
+    echo "        <input type='number' min='{$min}' max='{$max}' name='" . htmlspecialchars($name) . "' id='" . htmlspecialchars($name) . "' class='form-control' value='" . (int)$value . "' required>";
+    echo "        <div class='form-text'>" . htmlspecialchars($help) . "</div>";
+    echo "      </div>";
+}
+echo "    </div>";
+
+echo "    <div class='col-md-6'>";
+foreach ($seg_col2 as [$name, $value, $label, $help, $min, $max]) {
+    echo "      <div class='mb-3'>";
+    echo "        <label class='form-label fw-semibold' for='" . htmlspecialchars($name) . "'>" . htmlspecialchars($label) . "</label>";
+    echo "        <input type='number' min='{$min}' max='{$max}' name='" . htmlspecialchars($name) . "' id='" . htmlspecialchars($name) . "' class='form-control' value='" . (int)$value . "' required>";
+    echo "        <div class='form-text'>" . htmlspecialchars($help) . "</div>";
+    echo "      </div>";
+}
+echo "    </div>";
+
+echo "  </div>";
+if (Session::haveRight("plugin_glpichat_admin", UPDATE)) {
+    echo "  <div class='mt-2 text-end'>";
+    echo "    <button type='submit' name='update' class='btn btn-primary'><i class='ti ti-device-floppy me-1'></i>" . __('Salvar', 'glpichat') . "</button>";
+    echo "  </div>";
+}
+echo "</div>";
+
+// ── Tab: Interface ────────────────────────────────────────────────────────
+echo "<div class='tab-pane fade' id='tab-interface' role='tabpanel' aria-labelledby='tab-interface-link'>";
+
+echo "  <div class='mb-3'>";
+echo "    <label class='form-label fw-semibold' for='desktop_max_open'>" . __('Máximo de chats abertos no desktop', 'glpichat') . "</label>";
+echo "    <input type='number' min='1' max='10' name='desktop_max_open' id='desktop_max_open' class='form-control' value='" . (int)$desktop_max_open . "' required>";
+echo "    <div class='form-text'>" . __('Máximo de janelas de chat abertas ao mesmo tempo no widget desktop. Cada janela adicional = mais canais no poll.', 'glpichat') . "</div>";
+echo "  </div>";
+
+echo "  <div class='mb-3'>";
+echo "    <label class='form-label fw-semibold' for='widget_default_position'>" . __('Posição padrão do widget', 'glpichat') . "</label>";
+echo "    <select name='widget_default_position' id='widget_default_position' class='form-select'>";
+$position_labels = [
+    'bottom-right' => __('Inferior direito', 'glpichat'),
+    'bottom-left'  => __('Inferior esquerdo', 'glpichat'),
+    'top-right'    => __('Superior direito', 'glpichat'),
+    'top-left'     => __('Superior esquerdo', 'glpichat'),
+];
 foreach ($valid_positions as $pos) {
-    $selected = $widget_default_position === $pos ? " selected" : "";
-    echo "        <option value='" . htmlspecialchars($pos) . "'{$selected}>" . htmlspecialchars($pos) . "</option>";
+    $selected = $widget_default_position === $pos ? ' selected' : '';
+    $pos_label = $position_labels[$pos] ?? htmlspecialchars($pos);
+    echo "      <option value='" . htmlspecialchars($pos) . "'{$selected}>{$pos_label}</option>";
 }
-echo "      </select>";
-echo "      <div class='form-text text-muted'>" . __("Canto onde o widget de chat será posicionado por padrão.", "glpichat") . "</div>";
-echo "    </div>";
-
-echo "    <div class='mb-3'>";
-echo "      <label class='form-label' for='typing_indicator_timeout_ms'>" . __("Timeout do indicador de digitação (ms)", "glpichat") . "</label>";
-echo "      <input type='number' min='1000' max='10000' name='typing_indicator_timeout_ms' id='typing_indicator_timeout_ms' class='form-control' value='" . (int)$typing_indicator_timeout_ms . "' required>";
-echo "      <div class='form-text text-muted'>" . __("Tempo que o indicador 'está digitando...' permanece visível após o último evento de digitação.", "glpichat") . "</div>";
-echo "    </div>";
-
-echo "    <div class='mb-3'>";
-echo "      <div class='form-check'>";
-echo "        <input type='checkbox' name='auto_open_ticket_chat' id='auto_open_ticket_chat' class='form-check-input' value='1'" . ($auto_open_ticket_chat ? " checked" : "") . ">";
-echo "        <label class='form-check-label' for='auto_open_ticket_chat'>" . __("Abrir chat automaticamente ao entrar no chamado", "glpichat") . "</label>";
-echo "      </div>";
-echo "      <div class='form-text text-muted'>" . __("Quando ativado, o painel de chat é aberto automaticamente ao visualizar um chamado.", "glpichat") . "</div>";
-echo "    </div>";
-
-echo "    <div class='mb-3'>";
-echo "      <label class='form-label' for='auto_scroll_threshold_px'>" . __("Threshold de auto-scroll (px)", "glpichat") . "</label>";
-echo "      <input type='number' min='50' max='500' name='auto_scroll_threshold_px' id='auto_scroll_threshold_px' class='form-control' value='" . (int)$auto_scroll_threshold_px . "' required>";
-echo "      <div class='form-text text-muted'>" . __("Distância em pixels do fim da lista de mensagens para acionar o scroll automático.", "glpichat") . "</div>";
-echo "    </div>";
-
-echo "    <div class='mb-3'>";
-echo "      <label class='form-label' for='unread_badge_threshold'>" . __("Threshold do badge de não lidos", "glpichat") . "</label>";
-echo "      <input type='number' min='1' max='10' name='unread_badge_threshold' id='unread_badge_threshold' class='form-control' value='" . (int)$unread_badge_threshold . "' required>";
-echo "      <div class='form-text text-muted'>" . __("Número mínimo de mensagens não lidas para exibir o badge de contagem.", "glpichat") . "</div>";
-echo "    </div>";
-
+echo "    </select>";
+echo "    <div class='form-text'>" . __('Canto da tela onde o widget de chat aparecerá por padrão para todos os usuários.', 'glpichat') . "</div>";
 echo "  </div>";
+
+echo "  <div class='mb-3'>";
+echo "    <label class='form-label fw-semibold' for='typing_indicator_timeout_ms'>" . __('Timeout do indicador de digitação (ms)', 'glpichat') . "</label>";
+echo "    <input type='number' min='1000' max='10000' name='typing_indicator_timeout_ms' id='typing_indicator_timeout_ms' class='form-control' value='" . (int)$typing_indicator_timeout_ms . "' required>";
+echo "    <div class='form-text'>" . __("Tempo em ms que o indicador 'está digitando...' permanece visível após a última tecla pressionada.", 'glpichat') . "</div>";
+echo "  </div>";
+
+echo "  <div class='mb-3'>";
+echo "    <div class='form-check'>";
+echo "      <input type='checkbox' name='auto_open_ticket_chat' id='auto_open_ticket_chat' class='form-check-input' value='1'" . ($auto_open_ticket_chat ? ' checked' : '') . ">";
+echo "      <label class='form-check-label fw-semibold' for='auto_open_ticket_chat'>" . __('Abrir chat automaticamente ao entrar no chamado', 'glpichat') . "</label>";
+echo "    </div>";
+echo "    <div class='form-text'>" . __('Quando ativo, o chat abre automaticamente ao visualizar um chamado. Gera carga extra no carregamento inicial de tickets.', 'glpichat') . "</div>";
+echo "  </div>";
+
+echo "  <div class='mb-3'>";
+echo "    <label class='form-label fw-semibold' for='auto_scroll_threshold_px'>" . __('Threshold de auto-scroll (px)', 'glpichat') . "</label>";
+echo "    <input type='number' min='50' max='500' name='auto_scroll_threshold_px' id='auto_scroll_threshold_px' class='form-control' value='" . (int)$auto_scroll_threshold_px . "' required>";
+echo "    <div class='form-text'>" . __('Distância em pixels do final da lista de mensagens para ativar o scroll automático ao chegar nova mensagem.', 'glpichat') . "</div>";
+echo "  </div>";
+
+echo "  <div class='mb-3'>";
+echo "    <label class='form-label fw-semibold' for='unread_badge_threshold'>" . __('Threshold do badge de não lidos', 'glpichat') . "</label>";
+echo "    <input type='number' min='1' max='10' name='unread_badge_threshold' id='unread_badge_threshold' class='form-control' value='" . (int)$unread_badge_threshold . "' required>";
+echo "    <div class='form-text'>" . __('A partir de quantas mensagens não lidas o badge de contagem aparece no launcher do chat.', 'glpichat') . "</div>";
+echo "  </div>";
+
+if (Session::haveRight("plugin_glpichat_admin", UPDATE)) {
+    echo "  <div class='mt-2 text-end'>";
+    echo "    <button type='submit' name='update' class='btn btn-primary'><i class='ti ti-device-floppy me-1'></i>" . __('Salvar', 'glpichat') . "</button>";
+    echo "  </div>";
+}
 echo "</div>";
 
-// ── Bloco D — Comportamento do Chat ──────────────────────────────────────
-echo "<div class='card mb-4'>";
-echo "  <div class='card-header'><strong>" . __("Bloco D — Comportamento do Chat", "glpichat") . "</strong></div>";
-echo "  <div class='card-body'>";
+// ── Tab: Chat ─────────────────────────────────────────────────────────────
+echo "<div class='tab-pane fade' id='tab-chat' role='tabpanel' aria-labelledby='tab-chat-link'>";
 
-echo "    <div class='mb-3'>";
-echo "      <label class='form-label' for='history_page_default'>" . __("Mensagens por página (padrão)", "glpichat") . "</label>";
-echo "      <input type='number' min='10' max='100' name='history_page_default' id='history_page_default' class='form-control' value='" . (int)$history_page_default . "' required>";
-echo "      <div class='form-text text-muted'>" . __("Quantidade padrão de mensagens carregadas ao abrir o histórico.", "glpichat") . "</div>";
-echo "    </div>";
-
-echo "    <div class='mb-3'>";
-echo "      <label class='form-label' for='history_page_max'>" . __("Mensagens por página (máximo)", "glpichat") . "</label>";
-echo "      <input type='number' min='10' max='200' name='history_page_max' id='history_page_max' class='form-control' value='" . (int)$history_page_max . "' required>";
-echo "      <div class='form-text text-muted'>" . __("Limite máximo de mensagens que podem ser solicitadas por página.", "glpichat") . "</div>";
-echo "    </div>";
-
+echo "  <div class='mb-3'>";
+echo "    <label class='form-label fw-semibold' for='history_page_default'>" . __('Mensagens por página (padrão)', 'glpichat') . "</label>";
+echo "    <input type='number' min='10' max='100' name='history_page_default' id='history_page_default' class='form-control' value='" . (int)$history_page_default . "' required>";
+echo "    <div class='form-text'>" . __('Quantas mensagens são carregadas ao abrir um canal pela primeira vez.', 'glpichat') . "</div>";
 echo "  </div>";
+
+echo "  <div class='mb-3'>";
+echo "    <label class='form-label fw-semibold' for='history_page_max'>" . __('Mensagens por página (máximo)', 'glpichat') . "</label>";
+echo "    <input type='number' min='10' max='200' name='history_page_max' id='history_page_max' class='form-control' value='" . (int)$history_page_max . "' required>";
+echo "    <div class='form-text'>" . __('Limite máximo de mensagens que o frontend pode solicitar em uma única requisição de histórico.', 'glpichat') . "</div>";
+echo "  </div>";
+
+if (Session::haveRight("plugin_glpichat_admin", UPDATE)) {
+    echo "  <div class='mt-2 text-end'>";
+    echo "    <button type='submit' name='update' class='btn btn-primary'><i class='ti ti-device-floppy me-1'></i>" . __('Salvar', 'glpichat') . "</button>";
+    echo "  </div>";
+}
 echo "</div>";
 
-// ── Bloco E — Limpeza & Retenção ─────────────────────────────────────────
-echo "<div class='card mb-4'>";
-echo "  <div class='card-header'><strong>" . __("Bloco E — Limpeza & Retenção", "glpichat") . "</strong></div>";
-echo "  <div class='card-body'>";
+// ── Tab: Retenção ─────────────────────────────────────────────────────────
+echo "<div class='tab-pane fade' id='tab-retencao' role='tabpanel' aria-labelledby='tab-retencao-link'>";
 
-$fields_e = [
-    ['events_retention_days',   $events_retention_days,   __("Retenção de eventos (dias)", "glpichat"),    __("Eventos de chat mais antigos que este valor serão removidos pelo cron.", "glpichat"),     7, 365],
-    ['messages_retention_days', $messages_retention_days, __("Retenção de mensagens (dias)", "glpichat"),  __("Mensagens mais antigas que este valor serão removidas pelo cron.", "glpichat"),          30, 1825],
-    ['auditlogs_retention_days',$auditlogs_retention_days,__("Retenção de auditoria (dias)", "glpichat"),  __("Registros de auditoria mais antigos que este valor serão removidos pelo cron.", "glpichat"), 30, 730],
+echo "  <div class='alert alert-warning mb-3' role='alert'>";
+echo "    <div class='d-flex gap-2 align-items-center'>";
+echo "      <i class='ti ti-alert-triangle'></i>";
+echo "      <div>" . __('Reduzir os valores abaixo resulta em exclusão permanente de dados no próximo CronTask. Esta ação não pode ser desfeita.', 'glpichat') . "</div>";
+echo "    </div>";
+echo "  </div>";
+
+$retention_fields = [
+    [
+        'name'  => 'events_retention_days',
+        'value' => $events_retention_days,
+        'label' => __('Retenção de eventos (dias)', 'glpichat'),
+        'help'  => __('Eventos de sincronização (typing, presença, deltas) mais antigos que este número de dias são deletados pelo CronTask. Com volume médio: ~100K eventos/dia.', 'glpichat'),
+        'min'   => 7,
+        'max'   => 365,
+    ],
+    [
+        'name'  => 'messages_retention_days',
+        'value' => $messages_retention_days,
+        'label' => __('Retenção de mensagens (dias)', 'glpichat'),
+        'help'  => __("Mensagens do chat mais antigas que este número de dias são expurgadas. Um evento 'mensagens anteriores expurgadas' é inserido na timeline. CUIDADO: reduzir este valor deleta mensagens permanentemente no próximo CronTask.", 'glpichat'),
+        'min'   => 30,
+        'max'   => 1825,
+    ],
+    [
+        'name'  => 'auditlogs_retention_days',
+        'value' => $auditlogs_retention_days,
+        'label' => __('Retenção de auditoria (dias)', 'glpichat'),
+        'help'  => __('Registros de auditoria de acesso (tentativas de login de convidados, falhas de autenticação) mais antigos que este número de dias são deletados.', 'glpichat'),
+        'min'   => 30,
+        'max'   => 730,
+    ],
 ];
-foreach ($fields_e as [$name, $value, $label, $help, $min, $max]) {
-    echo "    <div class='mb-3'>";
-    echo "      <label class='form-label' for='" . htmlspecialchars($name) . "'>" . htmlspecialchars($label) . "</label>";
-    echo "      <input type='number' min='{$min}' max='{$max}' name='" . htmlspecialchars($name) . "' id='" . htmlspecialchars($name) . "' class='form-control' value='" . (int)$value . "' required>";
-    echo "      <div class='form-text text-muted'>" . htmlspecialchars($help) . "</div>";
-    echo "    </div>";
+
+foreach ($retention_fields as $field) {
+    echo "  <div class='mb-3'>";
+    echo "    <label class='form-label fw-semibold' for='" . htmlspecialchars($field['name']) . "'>";
+    echo       htmlspecialchars($field['label']);
+    echo "      <span class='badge bg-danger-lt text-danger ms-1'>" . __('Alto impacto', 'glpichat') . "</span>";
+    echo "    </label>";
+    echo "    <input type='number' min='{$field['min']}' max='{$field['max']}' name='" . htmlspecialchars($field['name']) . "' id='" . htmlspecialchars($field['name']) . "' class='form-control glpichat-retention-field' value='" . (int)$field['value'] . "' required>";
+    echo "    <div class='form-text'>" . htmlspecialchars($field['help']) . "</div>";
+    echo "  </div>";
 }
 
-echo "  </div>";
+if (Session::haveRight("plugin_glpichat_admin", UPDATE)) {
+    echo "  <div class='mt-2 text-end'>";
+    echo "    <button type='submit' name='update' class='btn btn-primary'><i class='ti ti-device-floppy me-1'></i>" . __('Salvar', 'glpichat') . "</button>";
+    echo "  </div>";
+}
 echo "</div>";
 
-// ── Outros ────────────────────────────────────────────────────────────────
-echo "<div class='card mb-4'>";
-echo "  <div class='card-header'><strong>" . __("Outros", "glpichat") . "</strong></div>";
-echo "  <div class='card-body'>";
+// ── Tab: Integração ───────────────────────────────────────────────────────
+echo "<div class='tab-pane fade' id='tab-integracao' role='tabpanel' aria-labelledby='tab-integracao-link'>";
 
-echo "    <div class='mb-3'>";
-echo "      <label class='form-label' for='dropdown_external_followup_user_id'>" . __("Usuário do GLPI associado a mensagens de convidados externos", "glpichat") . "</label>";
+echo "  <div class='mb-3'>";
+echo "    <label class='form-label fw-semibold' for='dropdown_external_followup_user_id'>" . __('Usuário associado a mensagens de convidados externos', 'glpichat') . "</label>";
 User::dropdown([
-    'name' => 'external_followup_user_id',
+    'name'  => 'external_followup_user_id',
     'value' => $external_followup_user_id,
     'width' => '100%',
 ]);
-echo "      <div class='form-text text-muted'>" . __("As ações no chat e followups inseridos por convidados externos serão associadas a este usuário do GLPI.", "glpichat") . "</div>";
-echo "    </div>";
-
+echo "    <div class='form-text'>" . __('As ações no chat e followups inseridos por convidados externos serão associadas a este usuário do GLPI.', 'glpichat') . "</div>";
 echo "  </div>";
-echo "  <div class='card-footer text-end'>";
+
 if (Session::haveRight("plugin_glpichat_admin", UPDATE)) {
-    echo "    <input type='submit' name='update' class='btn btn-primary' value='" . __("Salvar") . "'>";
+    echo "  <div class='mt-2 text-end'>";
+    echo "    <button type='submit' name='update' class='btn btn-primary'><i class='ti ti-device-floppy me-1'></i>" . __('Salvar', 'glpichat') . "</button>";
+    echo "  </div>";
 }
+echo "</div>";
+
+echo "</div>"; // tab-content
+echo "</form>";
+
+// ── Modal de confirmação ──────────────────────────────────────────────────
+echo "<div class='modal fade' id='glpichat-confirm-modal' tabindex='-1' role='dialog' aria-labelledby='glpichat-confirm-modal-title' aria-hidden='true'>";
+echo "  <div class='modal-dialog' role='document'>";
+echo "    <div class='modal-content'>";
+echo "      <div class='modal-header'>";
+echo "        <h5 class='modal-title' id='glpichat-confirm-modal-title'><i class='ti ti-alert-triangle me-2 text-danger'></i>" . __('Confirmar redução de retenção', 'glpichat') . "</h5>";
+echo "        <button type='button' class='btn-close' data-bs-dismiss='modal' aria-label='" . __('Fechar', 'glpichat') . "'></button>";
+echo "      </div>";
+echo "      <div class='modal-body overflow-auto'>";
+echo "        <p class='text-muted mb-2'>" . __('As seguintes alterações resultarão em exclusão permanente de dados no próximo CronTask:', 'glpichat') . "</p>";
+echo "        <ul id='glpichat-confirm-changes-list' class='mb-0'></ul>";
+echo "      </div>";
+echo "      <div class='modal-footer'>";
+echo "        <button type='button' class='btn btn-secondary' data-bs-dismiss='modal'>" . __('Cancelar', 'glpichat') . "</button>";
+echo "        <button type='button' class='btn btn-danger' id='glpichat-confirm-save-btn'><i class='ti ti-trash me-1'></i>" . __('Confirmar e Salvar', 'glpichat') . "</button>";
+echo "      </div>";
+echo "    </div>";
 echo "  </div>";
 echo "</div>";
 
-echo "</form>";
-echo "</div>"; // container
+echo "</div>"; // container-xl
+
+// ── Script inline ─────────────────────────────────────────────────────────
+$orig_events   = (int)$events_retention_days;
+$orig_messages = (int)$messages_retention_days;
+$orig_audit    = (int)$auditlogs_retention_days;
+
+echo "<script>";
+echo "(function () {";
+echo "  'use strict';";
+echo "";
+echo "  // Valores originais de retenção (injetados pelo PHP)";
+echo "  var origRetention = {";
+echo "    events_retention_days:   {$orig_events},";
+echo "    messages_retention_days: {$orig_messages},";
+echo "    auditlogs_retention_days: {$orig_audit}";
+echo "  };";
+echo "";
+echo "  var retentionLabels = {";
+echo "    events_retention_days:    " . json_encode(__('Retenção de eventos', 'glpichat')) . ",";
+echo "    messages_retention_days:  " . json_encode(__('Retenção de mensagens', 'glpichat')) . ",";
+echo "    auditlogs_retention_days: " . json_encode(__('Retenção de auditoria', 'glpichat'));
+echo "  };";
+echo "";
+echo "  // Guard de alterações não salvas";
+echo "  var isDirty = false;";
+echo "  var form = document.getElementById('glpichat-config-form');";
+echo "";
+echo "  form.addEventListener('change', function () { isDirty = true; });";
+echo "  form.addEventListener('input',  function () { isDirty = true; });";
+echo "";
+echo "  window.addEventListener('beforeunload', function (e) {";
+echo "    if (isDirty) {";
+echo "      e.preventDefault();";
+echo "      e.returnValue = '';";
+echo "    }";
+echo "  });";
+echo "";
+echo "  // Restaurar tab ativa pelo hash da URL";
+echo "  var hash = window.location.hash;";
+echo "  if (hash && /^#[\w-]+$/.test(hash)) {";
+echo "    var tabLink = document.querySelector('a[href=\"' + hash + '\"]');";
+echo "    if (tabLink) {";
+echo "      new bootstrap.Tab(tabLink).show();";
+echo "    }";
+echo "  }";
+echo "";
+echo "  // Atualizar hash ao trocar de tab";
+echo "  document.querySelectorAll('[data-bs-toggle=\"tab\"]').forEach(function (tab) {";
+echo "    tab.addEventListener('shown.bs.tab', function (e) {";
+echo "      history.replaceState(null, null, e.target.getAttribute('href'));";
+echo "    });";
+echo "  });";
+echo "";
+echo "  // Interceptar submit para modal de confirmação de retenção";
+echo "  var confirmModal    = null;";
+echo "  var confirmBtn      = document.getElementById('glpichat-confirm-save-btn');";
+echo "  var retentionConfirmed = false;";
+echo "";
+echo "  form.addEventListener('submit', function (e) {";
+echo "    // Se o usuário já confirmou via modal, deixar submeter normalmente";
+echo "    if (retentionConfirmed) {";
+echo "      isDirty = false;";
+echo "      return;";
+echo "    }";
+echo "";
+echo "    var reductions = [];";
+echo "";
+echo "    Object.keys(origRetention).forEach(function (fieldName) {";
+echo "      var input = document.getElementById(fieldName);";
+echo "      if (!input) return;";
+echo "      var newVal = parseInt(input.value, 10);";
+echo "      var origVal = origRetention[fieldName];";
+echo "      if (!isNaN(newVal) && newVal < origVal) {";
+echo "        var cutoffDate = new Date(Date.now() - newVal * 86400000);";
+echo "        var dateStr = cutoffDate.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });";
+echo "        reductions.push({";
+echo "          label:   retentionLabels[fieldName],";
+echo "          origVal: origVal,";
+echo "          newVal:  newVal,";
+echo "          dateStr: dateStr";
+echo "        });";
+echo "      }";
+echo "    });";
+echo "";
+echo "    if (reductions.length > 0) {";
+echo "      e.preventDefault();";
+echo "      var list = document.getElementById('glpichat-confirm-changes-list');";
+echo "      list.innerHTML = '';";
+echo "      reductions.forEach(function (r) {";
+echo "        var li = document.createElement('li');";
+echo "        li.className = 'mb-1';";
+echo "        li.innerHTML = '<strong>' + r.label + '</strong>: ' + r.origVal + ' &rarr; ' + r.newVal + ' " . __('dias', 'glpichat') . " &mdash; " . __('dados anteriores a', 'glpichat') . " <strong>' + r.dateStr + '</strong> " . __('serão deletados permanentemente', 'glpichat') . ".';";
+echo "        list.appendChild(li);";
+echo "      });";
+echo "";
+echo "      if (!confirmModal) {";
+echo "        confirmModal = new bootstrap.Modal(document.getElementById('glpichat-confirm-modal'));";
+echo "      }";
+echo "      confirmModal.show();";
+echo "    } else {";
+echo "      isDirty = false;";
+echo "    }";
+echo "  });";
+echo "";
+echo "  confirmBtn.addEventListener('click', function () {";
+echo "    retentionConfirmed = true;";
+echo "    isDirty = false;";
+echo "    if (confirmModal) confirmModal.hide();";
+echo "    // Disparar submit novamente — agora retentionConfirmed=true, não será interceptado";
+echo "    form.requestSubmit ? form.requestSubmit() : form.submit();";
+echo "  });";
+echo "";
+echo "})();";
+echo "</script>";
 
 Html::footer();

@@ -1882,17 +1882,6 @@ body.glpichat-guest-page {
   overflow: visible !important;
 }
 
-@keyframes glpichat-panel-exit-top {
-  from {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-  to {
-    opacity: 0;
-    transform: translateY(-6px) scale(0.99);
-  }
-}
-
 /* Typing Indicator Style - Dynamic presence overlay */
 .glpichat-typing-indicator {
   align-self: stretch;

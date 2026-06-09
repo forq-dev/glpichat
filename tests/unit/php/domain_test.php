@@ -115,7 +115,7 @@ glpichat_unit_assert_same(
 glpichat_unit_pass('Unread count above one remains visible');
 
 glpichat_unit_assert_same_array(
-    ['glpichat_public_message', 'glpichat_internal_message', 'glpichat_guest_message', 'glpichat_guest_joined', 'glpichat_guest_left', 'glpichat_guest_left_timeout'],
+    ['glpichat_public_message', 'glpichat_internal_message', 'glpichat_guest_message', 'glpichat_guest_joined', 'glpichat_guest_left', 'glpichat_guest_left_timeout', 'glpichat_user_joined', 'glpichat_user_left'],
     glpichat_default_notification_events(),
     'Default notification events stay ordered'
 );
@@ -150,17 +150,31 @@ glpichat_unit_assert_same(
 glpichat_unit_pass('Default subject uses native GLPI ticket tags');
 
 glpichat_unit_assert_same(
-    '##glpichat.event_action## no chamado ##ticket.id## por ##glpichat.sender_name##',
+    '##glpichat.sender_name##: ##glpichat.message_preview##',
     glpichat_default_template_text(),
-    'Default text template uses event_action and ticket.id tags'
+    'Default text template uses sender_name and message_preview tags'
 );
-glpichat_unit_pass('Default text template uses event_action and ticket.id tags');
+glpichat_unit_pass('Default text template uses sender_name and message_preview tags');
 
 glpichat_unit_assert_same(
-    '<p>##glpichat.event_action## no chamado ##ticket.id## por ##glpichat.sender_name##</p>',
+    '<p><strong>##glpichat.sender_name##</strong>: ##glpichat.message_preview##</p>',
     glpichat_default_template_html(),
-    'Default HTML template uses event_action and ticket.id tags'
+    'Default HTML template uses sender_name and message_preview tags'
 );
-glpichat_unit_pass('Default HTML template uses event_action and ticket.id tags');
+glpichat_unit_pass('Default HTML template uses sender_name and message_preview tags');
+
+glpichat_unit_assert_same(
+    'GLPI CHAT - Notificacao usuario entrou',
+    glpichat_default_notification_definition_name('glpichat_user_joined'),
+    'User joined notification keeps expected label'
+);
+glpichat_unit_pass('User joined notification keeps expected label');
+
+glpichat_unit_assert_same(
+    'GLPI CHAT - Notificacao usuario saiu',
+    glpichat_default_notification_definition_name('glpichat_user_left'),
+    'User left notification keeps expected label'
+);
+glpichat_unit_pass('User left notification keeps expected label');
 
 fwrite(STDOUT, "[PASS] Domain unit tests completed\n");

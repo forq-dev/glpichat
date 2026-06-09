@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 require dirname(__DIR__, 2) . '/bootstrap/unit.php';
 
-// Test 1: event_action map covers all 6 events
+// Test 1: event_action map covers all 8 events
 $event_actions = [
     'glpichat_public_message' => 'Nova mensagem do solicitante',
     'glpichat_internal_message' => 'Nova mensagem interna',
@@ -12,6 +12,8 @@ $event_actions = [
     'glpichat_guest_joined' => 'Convidado entrou no chat',
     'glpichat_guest_left' => 'Convidado saiu do chat',
     'glpichat_guest_left_timeout' => 'Sessao do convidado expirou',
+    'glpichat_user_joined' => 'Usuario entrou no chat',
+    'glpichat_user_left' => 'Usuario saiu do chat',
 ];
 
 foreach ($event_actions as $event => $label) {
@@ -42,7 +44,7 @@ glpichat_unit_assert_same(
 );
 glpichat_unit_pass('Internal channel type label is correct');
 
-// Test 3: Default notification events still have all 6 events
+// Test 3: Default notification events have all 8 events including the new user events
 $expected_events = [
     'glpichat_public_message',
     'glpichat_internal_message',
@@ -50,13 +52,15 @@ $expected_events = [
     'glpichat_guest_joined',
     'glpichat_guest_left',
     'glpichat_guest_left_timeout',
+    'glpichat_user_joined',
+    'glpichat_user_left',
 ];
 
 glpichat_unit_assert_same_array(
     $expected_events,
     glpichat_default_notification_events(),
-    'All 6 notification events are registered'
+    'All 8 notification events are registered'
 );
-glpichat_unit_pass('All 6 notification events are registered');
+glpichat_unit_pass('All 8 notification events are registered');
 
 fwrite(STDOUT, "[PASS] HookHandler tags unit tests completed\n");

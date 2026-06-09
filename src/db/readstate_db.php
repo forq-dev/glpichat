@@ -227,32 +227,49 @@ function glpichat_list_user_channels(int $users_id, int $focus_tickets_id): arra
         }
     }
 
-    // Batch-fetch active participants for this user across all rooms.
-    $participant_by_room = [];
+    // Batch-fetch all participants (active or expired) for this user across all rooms.
+    // We need both:
+    //   $latest_participant_by_room  — highest id per room (used for unread count calculation)
+    //   $active_participant_by_room  — left_at IS NULL (used for participants_id in output)
+    $latest_participant_by_room = [];
+    $active_participant_by_room = [];
     if (count($all_rooms_ids) > 0) {
         $p_rows = $DB->request([
-            'SELECT' => ['id', 'rooms_id', 'participant_type', 'users_id'],
+            'SELECT' => ['id', 'rooms_id', 'participant_type', 'users_id', 'left_at'],
             'FROM' => 'glpi_plugin_glpichat_participants',
             'WHERE' => [
                 'rooms_id' => $all_rooms_ids,
                 'users_id' => $users_id,
                 'participant_type' => GLPICHAT_ACTOR_USER,
-                'left_at' => null,
             ],
         ]);
         foreach ($p_rows as $row) {
-            $participant_by_room[(int) $row['rooms_id']] = $row;
+            $rid = (int) $row['rooms_id'];
+            // Keep the participant with the highest id as the most recent for this room.
+            if (
+                !isset($latest_participant_by_room[$rid]) ||
+                (int) $row['id'] > (int) $latest_participant_by_room[$rid]['id']
+            ) {
+                $latest_participant_by_room[$rid] = $row;
+            }
+            // Track the active participant (left_at IS NULL) separately.
+            if ($row['left_at'] === null) {
+                $active_participant_by_room[$rid] = $row;
+            }
         }
     }
 
-    // Batch-fetch readstates for found participants.
+    // Batch-fetch readstates for all relevant participants (active and latest-expired).
     $readstate_by_participant = [];
-    $participant_ids_list = array_map(static fn($p) => (int) $p['id'], $participant_by_room);
-    if (count($participant_ids_list) > 0) {
+    $all_relevant_participant_ids = array_unique(array_merge(
+        array_map(static fn($p) => (int) $p['id'], $latest_participant_by_room),
+        array_map(static fn($p) => (int) $p['id'], $active_participant_by_room)
+    ));
+    if (count($all_relevant_participant_ids) > 0) {
         $rs_rows = $DB->request([
             'SELECT' => ['participants_id', 'last_read_messages_id'],
             'FROM' => 'glpi_plugin_glpichat_readstates',
-            'WHERE' => ['participants_id' => $participant_ids_list],
+            'WHERE' => ['participants_id' => $all_relevant_participant_ids],
         ]);
         foreach ($rs_rows as $row) {
             $readstate_by_participant[(int) $row['participants_id']] = (int) $row['last_read_messages_id'];
@@ -277,14 +294,19 @@ function glpichat_list_user_channels(int $users_id, int $focus_tickets_id): arra
 
             // Use pre-fetched room_id (falls back to upsert only for newly allowed rooms).
             $rooms_id = $rooms_by_key[$key] ?? glpichat_room_id((int) $tickets_id, $room_type);
-            $participant = $participant_by_room[$rooms_id] ?? null;
-            $participants_id = $participant !== null ? (int) $participant['id'] : 0;
 
-            // Compute unread using pre-fetched participant + readstate (1 COUNT query max per room).
+            // participants_id in output must be the active participant (left_at IS NULL), or 0.
+            $active_participant = $active_participant_by_room[$rooms_id] ?? null;
+            $participants_id = $active_participant !== null ? (int) $active_participant['id'] : 0;
+
+            // Unread count uses the most recent participant (active or expired) so that users
+            // returning after inactivity timeout still see the correct badge count.
+            $latest_participant = $latest_participant_by_room[$rooms_id] ?? null;
             $unread_count = 0;
-            if ($participants_id > 0 && $participant !== null) {
-                $last_read = $readstate_by_participant[$participants_id] ?? 0;
-                $where = glpichat_unread_where_for_participant($participant, $last_read);
+            if ($latest_participant !== null) {
+                $latest_pid = (int) $latest_participant['id'];
+                $last_read = $readstate_by_participant[$latest_pid] ?? 0;
+                $where = glpichat_unread_where_for_participant($latest_participant, $last_read);
                 $count_row = $DB->request([
                     'COUNT' => 'cpt',
                     'FROM' => 'glpi_plugin_glpichat_messages',

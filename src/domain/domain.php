@@ -115,6 +115,8 @@ function glpichat_default_notification_definition_name(string $event): string
         'glpichat_guest_joined' => 'GLPI CHAT - Notificacao convidado entrou',
         'glpichat_guest_left' => 'GLPI CHAT - Notificacao convidado saiu',
         'glpichat_guest_left_timeout' => 'GLPI CHAT - Notificacao sessao convidado expirada',
+        'glpichat_user_joined' => 'GLPI CHAT - Notificacao usuario entrou',
+        'glpichat_user_left' => 'GLPI CHAT - Notificacao usuario saiu',
         default => 'GLPI CHAT - Notificacao chat',
     };
 }
@@ -128,6 +130,8 @@ function glpichat_default_notification_events(): array
         'glpichat_guest_joined',
         'glpichat_guest_left',
         'glpichat_guest_left_timeout',
+        'glpichat_user_joined',
+        'glpichat_user_left',
     ];
 }
 
@@ -138,12 +142,38 @@ function glpichat_default_template_subject(): string
 
 function glpichat_default_template_text(): string
 {
-    return '##glpichat.event_action## no chamado ##ticket.id## por ##glpichat.sender_name##';
+    return '##glpichat.sender_name##: ##glpichat.message_preview##';
 }
 
 function glpichat_default_template_html(): string
 {
-    return '<p>##glpichat.event_action## no chamado ##ticket.id## por ##glpichat.sender_name##</p>';
+    return '<p><strong>##glpichat.sender_name##</strong>: ##glpichat.message_preview##</p>';
+}
+
+function glpichat_event_notification_template_name(): string
+{
+    return 'GLPI CHAT - Layout evento';
+}
+
+function glpichat_event_template_text(): string
+{
+    return '##glpichat.sender_name## ##glpichat.message_preview##';
+}
+
+function glpichat_event_template_html(): string
+{
+    return '<p>##glpichat.sender_name## ##glpichat.message_preview##</p>';
+}
+
+function glpichat_event_notification_events(): array
+{
+    return [
+        'glpichat_guest_joined',
+        'glpichat_guest_left',
+        'glpichat_guest_left_timeout',
+        'glpichat_user_joined',
+        'glpichat_user_left',
+    ];
 }
 
 function glpichat_display_unread_count(int $raw_unread): int

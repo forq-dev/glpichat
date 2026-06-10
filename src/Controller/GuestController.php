@@ -71,7 +71,10 @@ final class GuestController extends AbstractController
                 glpichat_log_auth_failure('guest_accept_failed', $e->getMessage(), $request->getClientIp() ?? '');
             }
             $status = $e->getCode() === 429 ? 429 : 400;
-            return new Response(htmlescape($e->getMessage()), $status);
+            return new Response(
+                $this->errorHtml($e->getMessage(), 'Entre em contato com quem lhe enviou o convite.'),
+                $status
+            );
         }
     }
 
@@ -81,7 +84,7 @@ final class GuestController extends AbstractController
     {
         $session_token = $request->cookies->get(GLPICHAT_GUEST_COOKIE, '');
         if ($session_token === '') {
-            return new Response(htmlescape('Invalid or missing guest session.'), 400);
+            return new Response($this->errorHtml('Invalid or missing guest session.'), 400);
         }
         try {
             $participant = glpichat_guest_participant($session_token);
@@ -93,7 +96,10 @@ final class GuestController extends AbstractController
             $response->headers->set('Referrer-Policy', 'no-referrer');
             return $response;
         } catch (RuntimeException $e) {
-            return new Response(htmlescape($e->getMessage()), 400);
+            return new Response(
+                $this->errorHtml($e->getMessage()),
+                400
+            );
         }
     }
 
@@ -205,13 +211,14 @@ final class GuestController extends AbstractController
         global $CFG_GLPI;
         $url_path = parse_url($CFG_GLPI['url_base'] ?? '', PHP_URL_PATH) ?? '';
         $url_path = rtrim($url_path, '/');
+        $safe_url_path = htmlescape($url_path);
 
         $plugin_dir = dirname(__DIR__, 2);
         $css_version = file_exists($plugin_dir . '/public/css/glpichat.css') ? filemtime($plugin_dir . '/public/css/glpichat.css') : time();
         $js_version = file_exists($plugin_dir . '/public/js/glpichat-guest.js') ? filemtime($plugin_dir . '/public/js/glpichat-guest.js') : time();
 
         return '<!doctype html><html><head><meta charset="utf-8"><title>GLPI Chat</title>'
-            . '<link rel="stylesheet" href="' . $url_path . '/plugins/glpichat/public/css/glpichat.css?v=' . $css_version . '">'
+            . '<link rel="stylesheet" href="' . $safe_url_path . '/plugins/glpichat/public/css/glpichat.css?v=' . $css_version . '">'
             . '<meta name="viewport" content="width=device-width, initial-scale=1.0">'
             . '</head><body class="glpichat-guest-page">'
             . '<main class="glpichat glpichat-guest" data-ticket-id="' . htmlescape((string) $tickets_id) . '" data-room-id="' . htmlescape((string) $rooms_id) . '" data-guest="1">'
@@ -245,6 +252,36 @@ final class GuestController extends AbstractController
                 'auto_scroll_threshold_px'     => glpichat_config_int('auto_scroll_threshold_px', 160),
                 'typing_indicator_timeout_ms'  => glpichat_config_int('typing_indicator_timeout_ms', 3000),
             ]) . ';</script>'
-            . '<script src="' . $url_path . '/plugins/glpichat/public/js/glpichat-guest.js?v=' . $js_version . '"></script></body></html>';
+            . '<script src="' . $safe_url_path . '/plugins/glpichat/public/js/glpichat-guest.js?v=' . $js_version . '"></script></body></html>';
+    }
+
+    private function errorHtml(string $message, string $hint = ''): string
+    {
+        global $CFG_GLPI;
+        $url_path = parse_url($CFG_GLPI['url_base'] ?? '', PHP_URL_PATH) ?? '';
+        $url_path = rtrim($url_path, '/');
+        $safe_url_path = htmlescape($url_path);
+
+        $plugin_dir = dirname(__DIR__, 2);
+        $css_version = file_exists($plugin_dir . '/public/css/glpichat.css') ? filemtime($plugin_dir . '/public/css/glpichat.css') : time();
+
+        $hint_html = $hint !== ''
+            ? '<p class="glpichat-error-hint">' . htmlescape($hint) . '</p>'
+            : '';
+
+        return '<!doctype html><html><head><meta charset="utf-8"><title>GLPI Chat</title>'
+            . '<link rel="stylesheet" href="' . $safe_url_path . '/plugins/glpichat/public/css/glpichat.css?v=' . $css_version . '">'
+            . '<meta name="viewport" content="width=device-width, initial-scale=1.0">'
+            . '</head><body class="glpichat-guest-page">'
+            . '<main class="glpichat glpichat-guest">'
+            . '<div class="glpichat-chatbox-panel">'
+            . '<div class="glpichat-window-head"><strong>GLPI Chat</strong></div>'
+            . '<div class="glpichat-empty">'
+            . '<p>' . htmlescape($message) . '</p>'
+            . $hint_html
+            . '</div>'
+            . '</div>'
+            . '</main>'
+            . '</body></html>';
     }
 }

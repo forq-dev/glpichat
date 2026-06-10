@@ -465,7 +465,11 @@ const bootstrapGuest = async (guestRoot) => {
         tempItem.remove();
       }, 5000);
 
-      await syncGuest();
+      try {
+        await syncGuest();
+      } catch (syncErr) {
+        console.error("Sync after send failed:", syncErr);
+      }
     });
   }
 

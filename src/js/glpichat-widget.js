@@ -1897,6 +1897,8 @@ import {
           fd.set("_glpi_csrf_token", state.csrf);
           const created = await postForm(`${pluginBase}/Invite`, fd);
           await refreshInvites(ticketsId, created.url, null, targetContainer);
+          submitBtn.disabled = false;
+          submitBtn.textContent = "Criar invite";
         } catch (err) {
           alert("Erro ao criar convite: " + err.message);
           submitBtn.disabled = false;

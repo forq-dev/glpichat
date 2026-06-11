@@ -1924,6 +1924,23 @@ body.glpichat-guest-page {
   grid-row: 3;
 }
 
+.glpichat-error-screen {
+  align-content: center !important;
+  justify-items: center;
+  text-align: center;
+}
+
+.glpichat-error-screen .glpichat-empty {
+  max-width: 320px;
+}
+
+.glpichat-error-hint {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--glpichat-muted);
+  font-style: italic;
+}
+
 .glpichat-typing-indicator::before {
   content: "";
   display: block;

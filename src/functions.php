@@ -140,7 +140,7 @@ function glpichat_ticket_or_fail(int $tickets_id): Ticket
 
     $ticket = new Ticket();
     if (!$ticket->getFromDB($tickets_id)) {
-        throw new RuntimeException('Ticket not found.');
+        throw new RuntimeException('Chamado não encontrado.');
     }
 
     $cache[$tickets_id] = $ticket;
@@ -180,7 +180,7 @@ function glpichat_assert_ticket_open_for_chat(int $tickets_id): void
     }
 
     throw new RuntimeException(sprintf(
-        'Chat is archived for tickets with status "%s".',
+        'O chat está arquivado para chamados com status "%s".',
         Ticket::getStatus($status)
     ));
 }
@@ -199,7 +199,7 @@ function glpichat_can_read_ticket(int $tickets_id): bool
 function glpichat_assert_can_read_ticket(int $tickets_id): void
 {
     if (!glpichat_can_read_ticket($tickets_id)) {
-        throw new RuntimeException('User cannot read this chat.');
+        throw new RuntimeException('Você não tem permissão para acessar este chat.');
     }
 }
 
@@ -232,7 +232,7 @@ function glpichat_assert_can_send(int $tickets_id, string $room_type): void
     glpichat_assert_ticket_open_for_chat($tickets_id);
 
     if (!glpichat_can_send($tickets_id, $room_type)) {
-        throw new RuntimeException('User cannot send messages to this room.');
+        throw new RuntimeException('Você não tem permissão para enviar mensagens neste chat.');
     }
 }
 
@@ -251,7 +251,7 @@ function glpichat_can_read_room(int $tickets_id, string $room_type): bool
 function glpichat_assert_can_read_room(int $tickets_id, string $room_type): void
 {
     if (!glpichat_can_read_room($tickets_id, $room_type)) {
-        throw new RuntimeException('User cannot read this room.');
+        throw new RuntimeException('Você não tem permissão para acessar esta sala.');
     }
 }
 
@@ -266,7 +266,7 @@ function glpichat_can_view_participants(int $tickets_id): bool
 function glpichat_assert_can_view_participants(int $tickets_id): void
 {
     if (!glpichat_can_view_participants($tickets_id)) {
-        throw new RuntimeException('User cannot view chat participants.');
+        throw new RuntimeException('Você não tem permissão para visualizar os participantes do chat.');
     }
 }
 
@@ -281,7 +281,7 @@ function glpichat_can_create_invites(int $tickets_id): bool
 function glpichat_assert_can_create_invites(int $tickets_id): void
 {
     if (!glpichat_can_create_invites($tickets_id)) {
-        throw new RuntimeException('User cannot invite guests.');
+        throw new RuntimeException('Você não tem permissão para convidar externos.');
     }
 }
 
@@ -296,7 +296,7 @@ function glpichat_can_update_invites(int $tickets_id): bool
 function glpichat_assert_can_update_invites(int $tickets_id): void
 {
     if (!glpichat_can_update_invites($tickets_id)) {
-        throw new RuntimeException('User cannot manage invites.');
+        throw new RuntimeException('Você não tem permissão para gerenciar convites.');
     }
 }
 
@@ -349,9 +349,14 @@ function glpichat_participant_id_for_user(int $rooms_id, int $users_id): int
 
     try {
         $room = glpichat_room_by_id($rooms_id);
-        $tickets_id = (int) ($room['tickets_id'] ?? 0);
-        $user_name = (string) (getUserName($users_id) ?: ('Usuário #' . $users_id));
+    } catch (\Throwable $e) {
+        return $participants_id; // Sala indisponível em contexto de setup — skip silencioso
+    }
 
+    $tickets_id = (int) ($room['tickets_id'] ?? 0);
+    $user_name = (string) (getUserName($users_id) ?: ('Usuário #' . $users_id));
+
+    try {
         glpichat_record_event(
             $rooms_id,
             $tickets_id,
@@ -363,12 +368,16 @@ function glpichat_participant_id_for_user(int $rooms_id, int $users_id): int
                 'user_name' => $user_name,
             ]
         );
-
-        if ($tickets_id > 0) {
-            glpichat_raise_user_joined_notification_event($tickets_id, $user_name);
-        }
     } catch (\Throwable $e) {
-        // Ignorar falha silenciosamente caso ocorra em contexto de setup de salas
+        trigger_error('glpichat: falha ao registrar evento user_joined: ' . $e->getMessage(), E_USER_WARNING);
+    }
+
+    if ($tickets_id > 0) {
+        try {
+            glpichat_raise_user_joined_notification_event($tickets_id, $user_name);
+        } catch (\Throwable $e) {
+            trigger_error('glpichat: falha ao disparar notificação user_joined: ' . $e->getMessage(), E_USER_WARNING);
+        }
     }
 
     return $participants_id;
@@ -421,9 +430,14 @@ function glpichat_disconnect_user_participant(int $rooms_id, int $users_id): voi
 
     try {
         $room = glpichat_room_by_id($rooms_id);
-        $tickets_id = (int) ($room['tickets_id'] ?? 0);
-        $user_name = (string) (getUserName($users_id) ?: ('Usuário #' . $users_id));
+    } catch (\Throwable $e) {
+        return; // Sala removida — skip silencioso
+    }
 
+    $tickets_id = (int) ($room['tickets_id'] ?? 0);
+    $user_name = (string) (getUserName($users_id) ?: ('Usuário #' . $users_id));
+
+    try {
         glpichat_record_event(
             $rooms_id,
             $tickets_id,
@@ -435,12 +449,16 @@ function glpichat_disconnect_user_participant(int $rooms_id, int $users_id): voi
                 'user_name' => $user_name,
             ]
         );
-
-        if ($tickets_id > 0) {
-            glpichat_raise_user_left_notification_event($tickets_id, $user_name);
-        }
     } catch (\Throwable $e) {
-        // Ignorar silenciosamente se a sala já tiver sido removida
+        trigger_error('glpichat: falha ao registrar evento user_left: ' . $e->getMessage(), E_USER_WARNING);
+    }
+
+    if ($tickets_id > 0) {
+        try {
+            glpichat_raise_user_left_notification_event($tickets_id, $user_name);
+        } catch (\Throwable $e) {
+            trigger_error('glpichat: falha ao disparar notificação user_left: ' . $e->getMessage(), E_USER_WARNING);
+        }
     }
 }
 
@@ -475,9 +493,14 @@ function glpichat_expire_inactive_user_participants(): void
 
         try {
             $room = glpichat_room_by_id($rooms_id);
-            $tickets_id = (int) ($room['tickets_id'] ?? 0);
-            $user_name = (string) (getUserName($users_id) ?: ('Usuário #' . $users_id));
+        } catch (\Throwable $e) {
+            continue; // Sala removida — skip silencioso
+        }
 
+        $tickets_id = (int) ($room['tickets_id'] ?? 0);
+        $user_name = (string) (getUserName($users_id) ?: ('Usuário #' . $users_id));
+
+        try {
             glpichat_record_event(
                 $rooms_id,
                 $tickets_id,
@@ -489,12 +512,16 @@ function glpichat_expire_inactive_user_participants(): void
                     'user_name' => $user_name,
                 ]
             );
-
-            if ($tickets_id > 0) {
-                glpichat_raise_user_left_notification_event($tickets_id, $user_name);
-            }
         } catch (\Throwable $e) {
-            // Ignorar silenciosamente falhas de sala inexistente durante expiração
+            trigger_error('glpichat: falha ao registrar evento user_left: ' . $e->getMessage(), E_USER_WARNING);
+        }
+
+        if ($tickets_id > 0) {
+            try {
+                glpichat_raise_user_left_notification_event($tickets_id, $user_name);
+            } catch (\Throwable $e) {
+                trigger_error('glpichat: falha ao disparar notificação user_left: ' . $e->getMessage(), E_USER_WARNING);
+            }
         }
     }
 }
@@ -1007,7 +1034,7 @@ function glpichat_message_by_id(int $message_id): array
     global $DB;
 
     if ($message_id <= 0) {
-        throw new RuntimeException('Chat message not found.');
+        throw new RuntimeException('Mensagem de chat não encontrada.');
     }
 
     $row = $DB->request([
@@ -1017,7 +1044,7 @@ function glpichat_message_by_id(int $message_id): array
     ])->current();
 
     if (!is_array($row)) {
-        throw new RuntimeException('Chat message not found.');
+        throw new RuntimeException('Mensagem de chat não encontrada.');
     }
 
     $actor_type = (string) ($row['participant_type'] ?? '');
@@ -1087,7 +1114,7 @@ function glpichat_room_by_id(int $rooms_id): array
     ])->current();
 
     if (!is_array($room)) {
-        throw new RuntimeException('Chat room not found.');
+        throw new RuntimeException('Sala de chat não encontrada.');
     }
 
     return $room;
@@ -1153,18 +1180,18 @@ function glpichat_upload_document(int $tickets_id, UploadedFile $file, bool $sup
     $original_name = $file->getClientOriginalName();
     $uploadable_pattern = DocumentType::getUploadableFilePattern();
     if ($uploadable_pattern === '' || preg_match($uploadable_pattern, $original_name) !== 1) {
-        throw new RuntimeException('The uploaded file type is not allowed by GLPI.');
+        throw new RuntimeException('Este tipo de arquivo não é permitido pelo GLPI.');
     }
 
     $file_size = (int) $file->getSize();
     $glpi_max_size = (int) ($CFG_GLPI['document_max_size'] ?? 0) * 1024 * 1024;
     if ($glpi_max_size > 0 && $file_size > $glpi_max_size) {
-        throw new RuntimeException('The uploaded file exceeds the GLPI document size limit.');
+        throw new RuntimeException('O arquivo enviado excede o limite de tamanho do GLPI.');
     }
 
     $php_max_size = Toolbox::getPhpUploadSizeLimit();
     if ($php_max_size > 0 && $file_size > $php_max_size) {
-        throw new RuntimeException('The uploaded file exceeds the PHP upload size limit.');
+        throw new RuntimeException('O arquivo enviado excede o limite de tamanho do servidor.');
     }
 
     $safe_name = bin2hex(random_bytes(8)) . '_' . preg_replace('/[^A-Za-z0-9_.-]/', '_', $original_name);

@@ -84,7 +84,7 @@ final class GuestController extends AbstractController
     {
         $session_token = $request->cookies->get(GLPICHAT_GUEST_COOKIE, '');
         if ($session_token === '') {
-            return new Response($this->errorHtml('Invalid or missing guest session.'), 400);
+            return new Response($this->errorHtml('Sessão de acesso inválida ou ausente.'), 400);
         }
         try {
             $participant = glpichat_guest_participant($session_token);
@@ -276,9 +276,11 @@ final class GuestController extends AbstractController
             . '<main class="glpichat glpichat-guest">'
             . '<div class="glpichat-chatbox-panel">'
             . '<div class="glpichat-window-head"><strong>GLPI Chat</strong></div>'
+            . '<div class="glpichat-messages glpichat-error-screen">'
             . '<div class="glpichat-empty">'
             . '<p>' . htmlescape($message) . '</p>'
             . $hint_html
+            . '</div>'
             . '</div>'
             . '</div>'
             . '</main>'

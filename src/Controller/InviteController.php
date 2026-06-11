@@ -37,11 +37,11 @@ final class InviteController extends AbstractController
             $guest_email = trim((string) $request->request->getString('guest_email'));
 
             if ($guest_name === '') {
-                throw new RuntimeException('Guest name is required.');
+                throw new RuntimeException('O nome do convidado é obrigatório.');
             }
 
             if ($guest_email !== '' && !filter_var($guest_email, FILTER_VALIDATE_EMAIL)) {
-                throw new RuntimeException('Invalid guest email format.');
+                throw new RuntimeException('Formato de e-mail inválido.');
             }
 
             $invite = glpichat_create_invite_use_case(

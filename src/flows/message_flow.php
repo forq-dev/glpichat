@@ -10,7 +10,7 @@ function glpichat_validate_send_message_input(int $tickets_id, string $room_type
 {
     $trimmed_content = trim($content);
     if ($tickets_id <= 0 || $trimmed_content === '' || !glpichat_is_valid_room_type($room_type)) {
-        throw new RuntimeException('Invalid message parameters.');
+        throw new RuntimeException('Parâmetros de mensagem inválidos.');
     }
 
     return $trimmed_content;
@@ -24,7 +24,7 @@ function glpichat_attachment_message_content(string $original_name, string $sour
 function glpichat_validate_upload_input(int $tickets_id, string $room_type, mixed $file): UploadedFile
 {
     if ($tickets_id <= 0 || !glpichat_is_valid_room_type($room_type) || !$file instanceof UploadedFile) {
-        throw new RuntimeException('Invalid upload parameters.');
+        throw new RuntimeException('Parâmetros de upload inválidos.');
     }
 
     return $file;

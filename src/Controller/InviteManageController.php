@@ -57,7 +57,7 @@ final class InviteManageController extends AbstractController
             glpichat_require_logged_csrf($input);
             $invite_id = $request->request->getInt('invite_id');
             if ($invite_id <= 0) {
-                throw new RuntimeException('Invalid invite revoke parameters.');
+                throw new RuntimeException('Parâmetros de revogação de convite inválidos.');
             }
 
             glpichat_revoke_invite_use_case(
@@ -86,7 +86,7 @@ final class InviteManageController extends AbstractController
             glpichat_require_logged_csrf($input);
             $invite_id = $request->request->getInt('invite_id');
             if ($invite_id <= 0) {
-                throw new RuntimeException('Invalid invite reissue parameters.');
+                throw new RuntimeException('Parâmetros de reemissão de convite inválidos.');
             }
 
             $invite = glpichat_reissue_invite_use_case(

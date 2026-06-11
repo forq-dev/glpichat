@@ -32,7 +32,7 @@ final class SyncController extends AbstractController
         $last_event_id = $request->query->getString('last_event_id');
 
         if ($tickets_id <= 0 || !in_array($room_type, ['public', 'internal'], true)) {
-            throw new RuntimeException('Invalid sync parameters.');
+            throw new RuntimeException('Parâmetros de sincronização inválidos.');
         }
 
         glpichat_assert_can_read_room($tickets_id, $room_type);

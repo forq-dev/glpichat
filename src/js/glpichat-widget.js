@@ -424,7 +424,7 @@ import {
       ),
       canDisconnect: sessionStatus === "active" || (inviteStatus === "accepted" && !hasSessionTelemetry),
       canRevoke: inviteStatus === "active",
-      canReissue: inviteStatus === "active" || inviteStatus === "expired" || inviteStatus === "revoked",
+      canReissue: inviteStatus === "active" || inviteStatus === "expired",
       accessLabel: invite.was_accessed ? "Sim" : "Não"
     };
   };

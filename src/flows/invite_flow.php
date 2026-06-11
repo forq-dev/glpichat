@@ -9,7 +9,7 @@ function glpichat_validate_invite_input(int $tickets_id, string $guest_name, str
     $trimmed_name = trim($guest_name);
     $trimmed_email = trim($guest_email);
     if ($tickets_id <= 0 || $trimmed_name === '') {
-        throw new RuntimeException('Invalid invite parameters.');
+        throw new RuntimeException('Parâmetros de convite inválidos.');
     }
 
     return [
@@ -124,7 +124,7 @@ function glpichat_invite_management_status(string $invite_status, string $sessio
 function glpichat_assert_invite_found(?array $invite): array
 {
     if (!is_array($invite) || $invite === []) {
-        throw new RuntimeException('Invite not found.');
+        throw new RuntimeException('Convite não encontrado.');
     }
 
     return $invite;
@@ -193,7 +193,7 @@ function glpichat_create_invite_use_case(
         ],
     ])->current();
     if ((int) ($active_count_row['cpt'] ?? 0) >= $max_invites) {
-        throw new RuntimeException('Maximum active invites per ticket reached.');
+        throw new RuntimeException('Limite máximo de convites ativos por chamado atingido.');
     }
 
     $rooms_id = (int) $room_id((int) $validated['tickets_id'], GLPICHAT_ROOM_PUBLIC);
@@ -236,7 +236,7 @@ function glpichat_list_invites_use_case(
     int $now_timestamp
 ): array {
     if ($tickets_id <= 0) {
-        throw new RuntimeException('Invalid invite list parameters.');
+        throw new RuntimeException('Parâmetros de listagem de convites inválidos.');
     }
 
     $assert_can_read_ticket($tickets_id);
@@ -270,7 +270,7 @@ function glpichat_revoke_invite_use_case(
     $tickets_id = (int) $invite['tickets_id'];
     $assert_can_update_invites($tickets_id);
     if (!empty($invite['revoked_at'])) {
-        throw new RuntimeException('Invite cannot be revoked.');
+        throw new RuntimeException('Este convite não pode ser revogado.');
     }
 
     $mark_invite_revoked($invite_id, $now);
@@ -300,10 +300,10 @@ function glpichat_reissue_invite_use_case(
     $tickets_id = (int) $invite['tickets_id'];
     $assert_can_update_invites($tickets_id);
     if (!empty($invite['accepted_at'])) {
-        throw new RuntimeException('Accepted invite cannot be reissued.');
+        throw new RuntimeException('Convite já utilizado não pode ser reemitido.');
     }
     if (!empty($invite['revoked_at'])) {
-        throw new RuntimeException('Revoked invite cannot be reissued.');
+        throw new RuntimeException('Convite revogado não pode ser reemitido.');
     }
 
     $token = (string) $generate_token();

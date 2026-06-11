@@ -9,7 +9,7 @@ declare(strict_types=1);
 function glpichat_assert_valid_readstate_participant(?array $participant): array
 {
     if (!is_array($participant)) {
-        throw new RuntimeException('Chat participant not found.');
+        throw new RuntimeException('Participante do chat não encontrado.');
     }
 
     return $participant;

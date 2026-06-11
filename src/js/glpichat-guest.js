@@ -93,27 +93,45 @@ const applyGuestComposerState = (guestRoot, ticketStatus, isSessionExpired = fal
     return;
   }
 
-  let archivedNotice = guestRoot.querySelector("[data-role='guest-archived-notice']");
-  if (!(archivedNotice instanceof HTMLElement)) {
-    archivedNotice = document.createElement("div");
-    archivedNotice.className = "glpichat-empty";
-    archivedNotice.setAttribute("data-role", "guest-archived-notice");
-    form.parentNode.insertBefore(archivedNotice, form);
-  }
+  const messagesEl = guestRoot.querySelector("[data-role='messages']");
 
-  const textarea = form.querySelector("textarea");
-  const fileInput = form.querySelector("input[type='file']");
-  const submitButton = form.querySelector("button[type='submit']");
-  const attachButton = form.querySelector(".glpichat-attach");
-  
   let message = `Este chamado está ${ticketStatusLabel(ticketStatus).toLowerCase()}. O chat foi arquivado.`;
   if (isSessionExpired) {
     message = "Sessão expirada ou revogada. O chat foi encerrado.";
   }
 
-  archivedNotice.hidden = !archived;
-  archivedNotice.textContent = archived ? message : "";
-  form.hidden = archived;
+  let archivedNotice = guestRoot.querySelector("[data-role='guest-archived-notice']");
+  if (archived) {
+    if (!(archivedNotice instanceof HTMLElement)) {
+      archivedNotice = document.createElement("div");
+      archivedNotice.className = "glpichat-empty glpichat-archived-notice";
+      archivedNotice.setAttribute("data-role", "guest-archived-notice");
+      if (messagesEl instanceof HTMLElement) {
+        messagesEl.appendChild(archivedNotice);
+      }
+    }
+    archivedNotice.textContent = message;
+    archivedNotice.hidden = false;
+    if (messagesEl instanceof HTMLElement) {
+      messagesEl.style.alignContent = 'center';
+      messagesEl.style.justifyItems = 'center';
+      messagesEl.style.textAlign = 'center';
+    }
+  } else if (archivedNotice instanceof HTMLElement) {
+    archivedNotice.hidden = true;
+    if (messagesEl instanceof HTMLElement) {
+      messagesEl.style.alignContent = '';
+      messagesEl.style.justifyItems = '';
+      messagesEl.style.textAlign = '';
+    }
+  }
+
+  form.style.display = archived ? 'none' : '';
+
+  const textarea = form.querySelector("textarea");
+  const fileInput = form.querySelector("input[type='file']");
+  const submitButton = form.querySelector("button[type='submit']");
+  const attachButton = form.querySelector(".glpichat-attach");
 
   if (textarea instanceof HTMLTextAreaElement) {
     textarea.disabled = archived;

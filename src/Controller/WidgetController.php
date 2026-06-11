@@ -146,7 +146,7 @@ final class WidgetController extends AbstractController
             $history_max = glpichat_config_int('history_page_max', 50);
             $limit = max(1, min($history_max, $request->query->getInt('limit') ?: $history_default));
             if ($rooms_id <= 0) {
-                throw new RuntimeException('Invalid history parameters.');
+                throw new RuntimeException('Parâmetros de histórico inválidos.');
             }
 
             glpichat_widget_readable_room_or_fail(
@@ -186,7 +186,7 @@ final class WidgetController extends AbstractController
             $rooms_id = $request->request->getInt('rooms_id');
             $last_read_message_id = $request->request->getInt('last_read_message_id');
             if ($rooms_id <= 0 || $last_read_message_id < 0) {
-                throw new RuntimeException('Invalid mark read parameters.');
+                throw new RuntimeException('Parâmetros de leitura inválidos.');
             }
 
             glpichat_widget_readable_room_or_fail(
@@ -251,7 +251,7 @@ final class WidgetController extends AbstractController
 
             $rooms_id = $request->request->getInt('rooms_id');
             if ($rooms_id <= 0) {
-                throw new RuntimeException('Invalid room parameter.');
+                throw new RuntimeException('Parâmetro de sala inválido.');
             }
 
             glpichat_widget_readable_room_or_fail(

@@ -454,6 +454,16 @@ final class TicketTab extends CommonGLPI
                     $guest_name = $payload['guest_name'] ?? 'Convidado';
                     $details = 'A sessão do convidado <strong>' . htmlescape($guest_name) . '</strong> expirou por inatividade.';
                     break;
+                case 'user_joined':
+                    $action_label = 'Técnico Entrou';
+                    $user_name = $payload['user_name'] ?? 'Técnico';
+                    $details = 'O técnico <strong>' . htmlescape($user_name) . '</strong> entrou no chat.';
+                    break;
+                case 'user_left':
+                    $action_label = 'Técnico Saiu';
+                    $user_name = $payload['user_name'] ?? 'Técnico';
+                    $details = 'O técnico <strong>' . htmlescape($user_name) . '</strong> saiu do chat.';
+                    break;
             }
 
             // Actor identification

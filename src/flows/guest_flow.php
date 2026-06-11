@@ -21,7 +21,7 @@ function glpichat_validate_guest_message_content(string $content): string
 {
     $trimmed_content = trim($content);
     if ($trimmed_content === '') {
-        throw new RuntimeException('Invalid message content.');
+        throw new RuntimeException('Conteúdo da mensagem inválido.');
     }
 
     return $trimmed_content;
@@ -36,7 +36,7 @@ function glpichat_guest_ticket_id_from_room(array $room): int
 {
     $tickets_id = (int) ($room['tickets_id'] ?? 0);
     if ($tickets_id <= 0) {
-        throw new RuntimeException('Guest room not found.');
+        throw new RuntimeException('Sala de chat não encontrada.');
     }
 
     return $tickets_id;
@@ -48,7 +48,7 @@ function glpichat_guest_ticket_id_from_room(array $room): int
 function glpichat_assert_valid_accept_invite_result(?array $invite): array
 {
     if (!is_array($invite) || $invite === []) {
-        throw new RuntimeException('Invite is invalid, expired, accepted, or revoked.');
+        throw new RuntimeException('Convite inválido, expirado, já utilizado ou revogado.');
     }
 
     return $invite;
@@ -60,7 +60,7 @@ function glpichat_assert_valid_accept_invite_result(?array $invite): array
 function glpichat_assert_valid_guest_participant(?array $participant): array
 {
     if (!is_array($participant)) {
-        throw new RuntimeException('Guest session is invalid.');
+        throw new RuntimeException('Sessão de acesso inválida ou expirada.');
     }
 
     return $participant;
@@ -105,7 +105,7 @@ function glpichat_accept_invite_use_case(
     );
     $accepted = $mark_invite_accepted((int) $invite['id'], $participants_id);
     if ($accepted === false) {
-        throw new RuntimeException('Invite is invalid, expired, accepted, or revoked.');
+        throw new RuntimeException('Convite inválido, expirado, já utilizado ou revogado.');
     }
     $record_event(
         (int) $invite['rooms_id'],

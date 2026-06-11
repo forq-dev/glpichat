@@ -89,7 +89,7 @@ function glpichat_guest_participant(string $session_token): array
     ])->current();
 
     if (!is_array($participant)) {
-        throw new RuntimeException('Guest session is invalid.');
+        throw new RuntimeException('Essa sessão de convidado não é mais válida. Por favor, entre em contato com a pessoa que te enviou o invite.');
     }
 
     $ttl = glpichat_guest_session_ttl_config_seconds();
@@ -141,7 +141,7 @@ function glpichat_guest_participant(string $session_token): array
             }
         }
 
-        throw new RuntimeException('Guest session is invalid.');
+        throw new RuntimeException('Essa sessão de convidado não é mais válida. Por favor, entre em contato com a pessoa que te enviou o invite.');
     }
 
     return $participant;
@@ -226,7 +226,7 @@ function glpichat_assert_guest_not_throttled(int $participants_id, int $min_inte
 
     $elapsed = time() - strtotime((string) $row['last_send_at']);
     if ($elapsed < $min_interval_seconds) {
-        throw new RuntimeException('Too many requests.', 429);
+        throw new RuntimeException('Muitas requisições. Tente novamente em instantes.', 429);
     }
 }
 
@@ -327,6 +327,6 @@ function glpichat_assert_accept_not_rate_limited(string $ip): void
         $count = (int) ($row['cpt'] ?? 0);
     }
     if ($count >= glpichat_config_int('accept_rate_limit_max_attempts', 10)) {
-        throw new RuntimeException('Too many attempts. Try again later.', 429);
+        throw new RuntimeException('Muitas tentativas. Tente novamente mais tarde.', 429);
     }
 }

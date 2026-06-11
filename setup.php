@@ -9,7 +9,7 @@ use GlpiPlugin\Glpichat\HookHandler;
 use GlpiPlugin\Glpichat\ProfileTab;
 use GlpiPlugin\Glpichat\TicketTab;
 
-define('PLUGIN_GLPICHAT_VERSION', '1.0.5');
+define('PLUGIN_GLPICHAT_VERSION', '1.0.0');
 
 require_once __DIR__ . '/src/functions.php';
 
@@ -77,7 +77,7 @@ function plugin_version_glpichat(): array
     return [
         'name'           => 'GLPI Chat',
         'version'        => PLUGIN_GLPICHAT_VERSION,
-        'author'         => 'GLPI Chat contributors',
+        'author'         => 'Forq Labs',
         'license'        => 'GPLv3+',
         'homepage'       => '',
         'requirements'   => [

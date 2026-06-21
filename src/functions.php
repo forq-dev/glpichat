@@ -52,17 +52,17 @@ function glpichat_external_followup_user_id(): int
 {
     $value = Config::getConfigurationValue('plugin:glpichat', 'external_followup_user_id');
     if (!is_scalar($value)) {
-        throw new RuntimeException('Invalid plugin configuration for external followup user.');
+        throw new RuntimeException('Configuração inválida do plugin: usuário de acompanhamento externo.');
     }
 
     $users_id = (int) $value;
     if ($users_id <= 0) {
-        throw new RuntimeException('Plugin configuration external_followup_user_id must be a positive user id.');
+        throw new RuntimeException('Configuração do plugin: o campo "Usuário associado a mensagens de convidados externos" deve ser um usuário válido.');
     }
 
     $user = new User();
     if (!$user->getFromDB($users_id)) {
-        throw new RuntimeException('Configured external followup user does not exist.');
+        throw new RuntimeException('O usuário de acompanhamento externo configurado não existe.');
     }
 
     return $users_id;

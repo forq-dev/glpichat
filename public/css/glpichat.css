@@ -1968,3 +1968,82 @@ body.glpichat-guest-page {
   }
 }
 
+/* ===== Temas Escuros GLPI: Correções de Distribuição de Cores ===== */
+/*
+ * Nos temas darker, midnight e auror_dark, --glpi-mainmenu-bg e
+ * --tblr-bg-surface têm valores iguais ou muito próximos (ex: ambos
+ * #000 no midnight). Isso faz os derivados calculados no :root
+ * (accent-soft, accent-border) resultarem na mesma cor do fundo,
+ * tornando elementos invisíveis. O accent também some quando usado
+ * como cor de texto (dark sobre dark).
+ *
+ * Solução: recomputar os derivados usando --glpichat-text, que é
+ * sempre a cor legível do tema, e substituir accent por cores
+ * adequadas nos elementos que o usam como foreground.
+ */
+:root[data-glpi-theme-dark="1"] {
+  --glpichat-accent-soft:   color-mix(in srgb, var(--glpichat-text) 14%, var(--glpichat-surface));
+  --glpichat-accent-border: color-mix(in srgb, var(--glpichat-text) 28%, var(--glpichat-line));
+  --glpichat-hover-bg:      color-mix(in srgb, var(--glpichat-text) 8%,  var(--glpichat-surface));
+  --glpichat-shadow: 0 18px 34px color-mix(in srgb, var(--glpichat-text) 14%, transparent);
+  /* --tblr-bg-surface-secondary não é sobreposto pelos blocos dark do GLPI;
+     o cascade pode não propagar o --tblr-gray-50 remapeado, resultando no
+     fallback #f1f3f7 (claro) e tornando o texto das mensagens de sistema
+     invisível. Derivamos diretamente de variáveis que sabemos funcionar. */
+  --glpichat-surface-muted: color-mix(in srgb, var(--glpichat-text) 8%, var(--glpichat-surface));
+}
+
+/* Nome do remetente: accent (escuro) → primary (cor de destaque do tema) */
+:root[data-glpi-theme-dark="1"] .glpichat-message-head {
+  color: var(--glpichat-primary);
+}
+
+/* Aba ativa e filtro ativo: accent (escuro) → accent-fg (claro) */
+:root[data-glpi-theme-dark="1"] .glpichat-tab.is-active,
+:root[data-glpi-theme-dark="1"] .glpichat-status-filter.is-active {
+  color: var(--glpichat-accent-fg);
+}
+
+/* Avatar de convidado: accent como fundo e texto ambos escuros → corrigir texto */
+:root[data-glpi-theme-dark="1"] .glpichat-invite-avatar {
+  color: var(--glpichat-accent-fg);
+}
+
+/* Dropzone: accent como borda e texto → usar variáveis adaptadas ao dark */
+:root[data-glpi-theme-dark="1"] .glpichat-dropzone-overlay {
+  color: var(--glpichat-accent-fg);
+  border-color: var(--glpichat-accent-border);
+}
+
+/* Botão enviar: accent ≈ surface nos temas dark → usar primary para visibilidade */
+:root[data-glpi-theme-dark="1"] .glpichat-send-btn {
+  background: var(--glpichat-primary);
+  color: var(--glpichat-primary-fg);
+}
+
+:root[data-glpi-theme-dark="1"] .glpichat-send-btn:hover {
+  background: color-mix(in srgb, var(--glpichat-primary) 85%, white);
+  color: var(--glpichat-primary-fg);
+}
+
+:root[data-glpi-theme-dark="1"] .glpichat-send-btn:disabled {
+  background: var(--glpichat-surface-soft);
+  color: var(--glpichat-muted);
+  border-color: var(--glpichat-line);
+}
+
+/* Botões de convite: mesmo problema do send-btn → usar primary */
+:root[data-glpi-theme-dark="1"] .glpichat-invite button,
+:root[data-glpi-theme-dark="1"] .glpichat-invite-table button,
+:root[data-glpi-theme-dark="1"] .glpichat-invite button[type="submit"] {
+  background: var(--glpichat-primary);
+  color: var(--glpichat-primary-fg);
+}
+
+:root[data-glpi-theme-dark="1"] .glpichat-invite button:hover,
+:root[data-glpi-theme-dark="1"] .glpichat-invite-table button:hover,
+:root[data-glpi-theme-dark="1"] .glpichat-invite button[type="submit"]:hover {
+  background: color-mix(in srgb, var(--glpichat-primary) 85%, white);
+  color: var(--glpichat-primary-fg);
+}
+

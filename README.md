@@ -37,12 +37,31 @@ O **GLPI Chat** permite a comunicação ágil e integrada entre técnicos, solic
 
 ## ⚙️ Instalação Rápida
 
-1. Extraia/Clone os arquivos do plugin dentro da pasta de plugins do seu GLPI:
-   ```bash
-   plugins/glpichat/
-   ```
-2. Acesse o painel administrativo do GLPI: **Administração > Plugins**.
-3. Localize o plugin **GLPI Chat** na lista, clique em **Instalar** e depois em **Ativar**.
+### 1. Clonar o repositório
+
+Acesse a pasta de plugins do seu GLPI e clone o repositório:
+
+```bash
+cd /var/www/html/glpi/plugins
+git clone https://github.com/msouza10/glpichat.git glpichat
+```
+
+> Se preferir instalar via ZIP, extraia o conteúdo de forma que o caminho final seja `plugins/glpichat/`.
+
+### 2. Ajustar permissões
+
+Defina o proprietário dos arquivos para o usuário do servidor web (substitua `www-data` pelo usuário correto do seu ambiente — `apache` no CentOS/RHEL, `www-data` no Debian/Ubuntu):
+
+```bash
+chown -R www-data:www-data /var/www/html/glpi/plugins/glpichat
+find /var/www/html/glpi/plugins/glpichat -type d -exec chmod 755 {} \;
+find /var/www/html/glpi/plugins/glpichat -type f -exec chmod 644 {} \;
+```
+
+### 3. Ativar no GLPI
+
+1. Acesse o painel administrativo do GLPI: **Administração > Plugins**.
+2. Localize o plugin **GLPI Chat** na lista, clique em **Instalar** e depois em **Ativar**.
 
 ---
 

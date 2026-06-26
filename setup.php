@@ -77,7 +77,7 @@ function plugin_version_glpichat(): array
     return [
         'name'           => 'GLPI Chat',
         'version'        => PLUGIN_GLPICHAT_VERSION,
-        'author'         => 'Forq Labs',
+        'author'         => 'Forq',
         'license'        => 'GPLv3+',
         'homepage'       => '',
         'requirements'   => [

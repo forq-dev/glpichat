@@ -12,7 +12,14 @@ export const MOBILE_MAX_OPEN = 1;
 export const VALID_POSITIONS = ["bottom-right", "bottom-left", "top-left", "top-right"];
 export const SAFE_BOTTOM_MARGIN_PX = 8;
 export const TERMINAL_TICKET_STATUSES = new Set([5, 6]);
-export const pluginBase = "/plugins/glpichat";
+// Prefixo de todas as URLs do plugin (assets e endpoints).
+// Deriva de CFG_GLPI.root_doc para funcionar quando o GLPI esta instalado
+// em subdiretorio (ex.: /glpi). Em paginas onde CFG_GLPI nao existe (convidado),
+// cai no caminho relativo a raiz, preservando o comportamento anterior.
+export const pluginBase =
+  (typeof window !== "undefined" && window.CFG_GLPI && window.CFG_GLPI.root_doc
+    ? window.CFG_GLPI.root_doc
+    : "") + "/plugins/glpichat";
 
 /**
  * Validate if room type is valid

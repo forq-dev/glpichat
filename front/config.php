@@ -362,6 +362,9 @@ User::dropdown([
     'name'  => 'external_followup_user_id',
     'value' => $external_followup_user_id,
     'width' => '100%',
+    // Sem 'right' o GLPI usa o default 'id', que lista apenas o usuario logado.
+    // 'all' lista todos os usuarios para associar aos followups de convidados.
+    'right' => 'all',
 ]);
 echo "    <div class='form-text'>" . __('As ações no chat e followups inseridos por convidados externos serão associadas a este usuário do GLPI.', 'glpichat') . "</div>";
 echo "  </div>";

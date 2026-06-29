@@ -20,202 +20,111 @@ jobs:
     timeout-minutes: 30
 
     env:
-      # Porta exposta pelo container GLPI no runner — usada pela esteira e pelos E2E.
       GLPI_BASE_URL: "http://localhost:8080"
-      # Nome do container referenciado pelos scripts docker exec glpi ...
-      GLPI_CONTAINER_NAME: "glpi"
 
     steps:
-      # ------------------------------------------------------------------
-      # 1. Checkout
-      # ------------------------------------------------------------------
       - name: "Checkout"
         uses: "actions/checkout@v4"
 
-      # ------------------------------------------------------------------
-      # 2. Escrever docker-compose.ci.yml inline
-      #    O plugin é montado em /var/www/glpi/plugins/glpichat via bind
-      #    mount do workspace do runner.
-      # ------------------------------------------------------------------
-      - name: "Create docker-compose.ci.yml"
-        run: |
-          cat > "${{ github.workspace }}/docker-compose.ci.yml" <<'COMPOSE'
-          services:
-            db:
-              image: "mysql:8.0"
-              container_name: "glpi-db"
-              restart: "no"
-              environment:
-                MYSQL_ROOT_PASSWORD: "glpiroot"
-                MYSQL_DATABASE: "glpi"
-                MYSQL_USER: "glpi"
-                MYSQL_PASSWORD: "glpi"
-              healthcheck:
-                test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "glpi", "-pglpi"]
-                interval: 5s
-                timeout: 5s
-                retries: 20
-                start_period: 15s
-
-            glpi:
-              image: "glpi/glpi:latest"
-              container_name: "glpi"
-              restart: "no"
-              depends_on:
-                db:
-                  condition: service_healthy
-              ports:
-                - "8080:80"
-              environment:
-                GLPI_DB_HOST: "db"
-                GLPI_DB_PORT: "3306"
-                GLPI_DB_NAME: "glpi"
-                GLPI_DB_USER: "glpi"
-                GLPI_DB_PASSWORD: "glpi"
-              volumes:
-                - type: "bind"
-                  source: "${{ github.workspace }}"
-                  target: "/var/www/glpi/plugins/glpichat"
-              healthcheck:
-                test: ["CMD", "curl", "-sf", "http://localhost/front/login.php"]
-                interval: 10s
-                timeout: 10s
-                retries: 18
-                start_period: 45s
-          COMPOSE
-
-      # ------------------------------------------------------------------
-      # 3. Instalar dependências do sistema para E2E
-      #    chromium-browser é o mesmo binário que o E2E chama em
-      #    /usr/bin/chromium — é um symlink para chromium-browser no Ubuntu.
-      # ------------------------------------------------------------------
-      - name: "Install system dependencies (Chromium + Python)"
+      - name: "Install Chromium and Python deps"
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
-            chromium-browser \
-            python3 \
-            python3-pip \
-            python3-venv \
-            curl
-          # Garante que /usr/bin/chromium aponta para chromium-browser.
+            chromium-browser python3 python3-pip curl
           if [[ ! -f /usr/bin/chromium ]] && [[ -f /usr/bin/chromium-browser ]]; then
             sudo ln -sf /usr/bin/chromium-browser /usr/bin/chromium
           fi
           chromium --version
-
-      - name: "Install Python dependencies (Playwright)"
-        run: |
           pip3 install --quiet playwright
-          # NÃO roda "playwright install chromium" — o E2E usa o binário do
-          # sistema via executable_path="/usr/bin/chromium" (já instalado acima).
-          # Apenas garante que as libs de sistema necessárias estão presentes.
-          sudo apt-get install -y --no-install-recommends \
-            libnss3 \
-            libatk1.0-0 \
-            libatk-bridge2.0-0 \
-            libcups2 \
-            libxkbcommon0 \
-            libxcomposite1 \
-            libxdamage1 \
-            libxfixes3 \
-            libxrandr2 \
-            libgbm1 \
-            libpango-1.0-0 \
-            libcairo2 \
-            libasound2 
 
-Run pip3 install --quiet playwright
-  pip3 install --quiet playwright
-  # NÃO roda "playwright install chromium" — o E2E usa o binário do
-  # sistema via executable_path="/usr/bin/chromium" (já instalado acima).
-  # Apenas garante que as libs de sistema necessárias estão presentes.
-  sudo apt-get install -y --no-install-recommends \
-    libnss3 \
-    libatk1.0-0 \
-    libatk-bridge2.0-0 \
-    libcups2 \
-    libxkbcommon0 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxfixes3 \
-    libxrandr2 \
-    libgbm1 \
-    libpango-1.0-0 \
-    libcairo2 \
-    libasound2 \ 
-    libgcc1 \
-    liboss4-salsa-asound2 \
-    4.2-build2020-1ubuntu3.1 \
-    libasound2t64 \
-    1.2.11-1ubuntu0.2 
-
-      # ------------------------------------------------------------------
-      # 4. Subir os containers
-      # ------------------------------------------------------------------
-      - name: "Start containers"
+      # O bind mount do plugin usa o path real do workspace, que só é conhecido
+      # em runtime. Por isso o compose é gerado via printf com a variável expandida
+      # pelo shell do runner — sem heredoc para evitar conflito com YAML do workflow.
+      - name: "Create docker-compose.ci.yml"
         run: |
-          docker compose -f docker-compose.ci.yml up -d
-          echo "Aguardando GLPI ficar healthy..."
+          printf '%s\n' \
+            'services:' \
+            '  db:' \
+            '    image: "mysql:8.0"' \
+            '    container_name: "glpi-db"' \
+            '    restart: "no"' \
+            '    environment:' \
+            '      MYSQL_ROOT_PASSWORD: "glpiroot"' \
+            '      MYSQL_DATABASE: "glpi"' \
+            '      MYSQL_USER: "glpi"' \
+            '      MYSQL_PASSWORD: "glpi"' \
+            '    healthcheck:' \
+            '      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "glpi", "-pglpi"]' \
+            '      interval: 5s' \
+            '      timeout: 5s' \
+            '      retries: 20' \
+            '      start_period: 15s' \
+            '  glpi:' \
+            '    image: "glpi/glpi:latest"' \
+            '    container_name: "glpi"' \
+            '    restart: "no"' \
+            '    depends_on:' \
+            '      db:' \
+            '        condition: service_healthy' \
+            '    ports:' \
+            '      - "8080:80"' \
+            '    environment:' \
+            '      GLPI_DB_HOST: "db"' \
+            '      GLPI_DB_PORT: "3306"' \
+            '      GLPI_DB_NAME: "glpi"' \
+            '      GLPI_DB_USER: "glpi"' \
+            '      GLPI_DB_PASSWORD: "glpi"' \
+            '    volumes:' \
+            "      - type: bind" \
+            "        source: $GITHUB_WORKSPACE" \
+            '        target: /var/www/glpi/plugins/glpichat' \
+            '    healthcheck:' \
+            '      test: ["CMD", "curl", "-sf", "http://localhost/front/login.php"]' \
+            '      interval: 10s' \
+            '      timeout: 10s' \
+            '      retries: 18' \
+            '      start_period: 45s' \
+            > docker-compose.ci.yml
+          echo "--- docker-compose.ci.yml gerado ---"
+          cat docker-compose.ci.yml
+
+      - name: "Start containers"
+        run: docker compose -f docker-compose.ci.yml up -d
 
       - name: "Wait for GLPI to be healthy"
         run: |
-          MAX=36  # 36 x 10s = 6 minutos
-          COUNT=0
-          until docker inspect --format='{{.State.Health.Status}}' glpi 2>/dev/null | grep -q "healthy"; do
-            if [[ $COUNT -ge $MAX ]]; then
-              echo "[FAIL] GLPI nao ficou healthy em tempo habil"
-              docker logs glpi --tail 50
-              exit 1
+          for i in $(seq 1 36); do
+            STATUS=$(docker inspect --format='{{.State.Health.Status}}' glpi 2>/dev/null || echo "unknown")
+            if [[ "$STATUS" == "healthy" ]]; then
+              echo "[OK] GLPI healthy apos ${i}x10s"
+              sleep 5
+              exit 0
             fi
-            echo "  Aguardando... ($COUNT/$MAX)"
+            echo "  Aguardando GLPI ($i/36)... status=$STATUS"
             sleep 10
-            COUNT=$((COUNT + 1))
           done
-          echo "[OK] GLPI healthy"
-          # Aguarda 5s extras para o Apache estar completamente pronto.
-          sleep 5
+          echo "[FAIL] GLPI nao ficou healthy em 6 minutos"
+          docker logs glpi --tail 80
+          exit 1
 
-      # ------------------------------------------------------------------
-      # 5. Verificar que o plugin está acessível dentro do container
-      # ------------------------------------------------------------------
-      - name: "Verify plugin mount inside container"
+      - name: "Verify plugin mount"
         run: |
           docker exec glpi php -r "
-            if (!file_exists('/var/www/glpi/plugins/glpichat/setup.php')) {
-              echo 'FAIL: setup.php nao encontrado no container\n';
-              exit(1);
-            }
-            echo 'OK: plugin montado corretamente\n';
+            \$ok = file_exists('/var/www/glpi/plugins/glpichat/setup.php');
+            echo \$ok ? 'OK: plugin montado' : 'FAIL: setup.php ausente';
+            exit(\$ok ? 0 : 1);
           "
 
-      # ------------------------------------------------------------------
-      # 6. Instalar o plugin via GLPI CLI
-      # ------------------------------------------------------------------
       - name: "Install glpichat plugin"
         run: |
           docker exec glpi php /var/www/glpi/bin/console \
-            glpi:plugin:install \
-            --username=glpi \
-            glpichat
+            glpi:plugin:install --username=glpi glpichat
           docker exec glpi php /var/www/glpi/bin/console \
-            glpi:plugin:activate \
-            glpichat
+            glpi:plugin:activate glpichat
 
-      # ------------------------------------------------------------------
-      # 7. Rodar a esteira completa
-      #    O prepare_env.php cria o usuario "self" automaticamente se nao existir.
-      # ------------------------------------------------------------------
       - name: "Run full test suite"
-        env:
-          GLPICHAT_BASE_URL: "${{ env.GLPI_BASE_URL }}"
-        run: |
-          chmod +x tests/run_full_suite.sh
-          bash tests/run_full_suite.sh "${{ env.GLPI_BASE_URL }}"
+        run: bash tests/run_full_suite.sh "${{ env.GLPI_BASE_URL }}"
 
-      # ------------------------------------------------------------------
-      # 9. Publicar logs como artifact (sempre — inclusive em falha)
-      # ------------------------------------------------------------------
       - name: "Upload test logs"
         if: always()
         uses: "actions/upload-artifact@v4"
@@ -224,21 +133,12 @@ Run pip3 install --quiet playwright
           path: "tests/logs/"
           retention-days: 14
 
-      # ------------------------------------------------------------------
-      # 10. Logs do container em caso de falha (debug)
-      # ------------------------------------------------------------------
       - name: "Container logs on failure"
         if: failure()
         run: |
-          echo "=== GLPI container logs (last 100 lines) ==="
           docker logs glpi --tail 100 || true
-          echo "=== DB container logs (last 50 lines) ==="
           docker logs glpi-db --tail 50 || true
 
-      # ------------------------------------------------------------------
-      # 11. Parar containers
-      # ------------------------------------------------------------------
       - name: "Stop containers"
         if: always()
-        run: |
-          docker compose -f docker-compose.ci.yml down --volumes --remove-orphans || true
+        run: docker compose -f docker-compose.ci.yml down --volumes --remove-orphans || true

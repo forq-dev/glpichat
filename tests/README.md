@@ -41,7 +41,52 @@ tests/
 └── run_unit_php.sh             # Roteador principal das suítes de teste
 ```
 
-## Camadas
+## Pré-requisitos de Ambiente
+
+Para rodar as camadas de integração (smoke-php, smoke-http, e2e, lifecycle) você precisa de uma instância do GLPI rodando com o plugin instalado e dois usuários configurados:
+
+| Usuário | Senha | Perfil | Criado por |
+|---------|-------|--------|------------|
+| `glpi` | `glpi` | Super-Admin | GLPI (padrão de instalação) |
+| `self` | `self` | Self-Service | **Você precisa criar manualmente** |
+
+### Criando o usuário `self`
+
+O GLPI não cria o usuário `self` automaticamente. Você precisa criá-lo antes de rodar a esteira:
+
+**Via interface:**
+1. Acesse **Administração > Usuários > Adicionar**
+2. Login: `self`, Senha: `self`, Perfil padrão: `Self-Service`
+3. Salve
+
+**Via PHP CLI no container:**
+```bash
+docker exec glpi php - <<'PHP'
+<?php
+$loader = require '/var/www/glpi/vendor/autoload.php';
+$kernel = new \Glpi\Kernel\Kernel();
+$kernel->boot();
+
+$profile_row = $GLOBALS['DB']->request([
+    'SELECT' => ['id'], 'FROM' => 'glpi_profiles',
+    'WHERE' => ['name' => 'Self-Service'], 'LIMIT' => 1,
+])->current();
+$profiles_id = is_array($profile_row) ? (int)$profile_row['id'] : 6;
+
+$user = new User();
+$id = (int) $user->add([
+    'name' => 'self', 'password' => 'self', 'password2' => 'self',
+    'is_active' => 1, 'profiles_id' => $profiles_id, '_profiles_id' => $profiles_id,
+]);
+echo $id > 0 ? "[PASS] self criado (id=$id)\n" : "[FAIL] nao foi possivel criar\n";
+PHP
+```
+
+O usuário `self` representa o solicitante (requester) nos testes de integração e E2E. Sem ele, o `prepare_env.php` falhará ao tentar vincular um solicitante ao ticket dedicado da esteira.
+
+---
+
+
 
 1. **Unitário**
    - Cobre regras puras e determinísticas.

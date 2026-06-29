@@ -201,10 +201,36 @@ $self_id = prepUserId('self');
 $glpi_id = prepUserId('glpi');
 
 if ($self_id <= 0) {
-    prepFail('Usuario "self" (solicitante) nao encontrado em glpi_users');
+    // O usuario "self" nao existe — tenta criar automaticamente.
+    // Isso evita que contribuidores travem ao rodar a esteira em uma
+    // instalacao limpa do GLPI sem ter criado o usuario manualmente.
+    prepInfo('Usuario "self" nao encontrado — criando automaticamente...');
+
+    $profile_row = $DB->request([
+        'SELECT' => ['id'],
+        'FROM'   => 'glpi_profiles',
+        'WHERE'  => ['name' => 'Self-Service'],
+        'LIMIT'  => 1,
+    ])->current();
+    $profiles_id = is_array($profile_row) ? (int) ($profile_row['id'] ?? 6) : 6;
+
+    $new_user = new User();
+    $self_id = (int) $new_user->add([
+        'name'         => 'self',
+        'password'     => 'self',
+        'password2'    => 'self',
+        'is_active'    => 1,
+        'profiles_id'  => $profiles_id,
+        '_profiles_id' => $profiles_id,
+    ]);
+
+    if ($self_id <= 0) {
+        prepFail('Nao foi possivel criar o usuario "self" automaticamente. Crie-o manualmente (ver tests/README.md).');
+    }
+    prepPass("Usuario \"self\" criado automaticamente (id={$self_id}, profiles_id={$profiles_id})");
 }
 if ($glpi_id <= 0) {
-    prepFail('Usuario "glpi" (tecnico) nao encontrado em glpi_users');
+    prepFail('Usuario "glpi" nao encontrado em glpi_users — instalacao do GLPI invalida?');
 }
 prepPass("IDs resolvidos: self={$self_id} glpi={$glpi_id}");
 

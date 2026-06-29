@@ -148,16 +148,22 @@ while IFS= read -r f; do
 done < <(find "$plugin_root/tests/smoke/php" -maxdepth 1 -name '*_smoke_test.php' | sort)
 
 # ---------------------------------------------------------------------------
-# smoke-http
+# smoke-http (um log por arquivo — itera todos os *.sh em tests/smoke/http/)
 # ---------------------------------------------------------------------------
 log_step "smoke-http"
-smoke_http_log="$logs_root/smoke-http.log"
-smoke_http_runner="$plugin_root/tests/smoke/http/http_security_smoke_test.sh"
-if [[ -f "$smoke_http_runner" ]]; then
-  bash "$smoke_http_runner" "$base_url" "$GLPICHAT_TICKET_ID" "public" >"$smoke_http_log" 2>&1
-  record_result "smoke-http" "http_security_smoke_test.sh" "$?" "$smoke_http_log"
-else
-  printf '  [FAIL] runner ausente: %s\n' "$smoke_http_runner" | tee "$smoke_http_log"
+mkdir -p "$logs_root/smoke-http"
+smoke_http_found=0
+while IFS= read -r smoke_runner; do
+  [[ -z "$smoke_runner" ]] && continue
+  smoke_http_found=1
+  smoke_base="$(basename "$smoke_runner")"
+  smoke_http_log="$logs_root/smoke-http/${smoke_base%.sh}.log"
+  bash "$smoke_runner" "$base_url" "$GLPICHAT_TICKET_ID" "public" >"$smoke_http_log" 2>&1
+  record_result "smoke-http" "$smoke_base" "$?" "$smoke_http_log"
+done < <(find "$plugin_root/tests/smoke/http" -maxdepth 1 -name '*.sh' | sort)
+
+if [[ "$smoke_http_found" -eq 0 ]]; then
+  printf '  [FAIL] nenhum *.sh encontrado em tests/smoke/http/\n'
   layer_fail["smoke-http"]=1
   overall_fail=1
 fi

@@ -60,7 +60,7 @@ try {
     glpichat_unit_fail('Should throw exception for invalid session token');
 } catch (RuntimeException $e) {
     glpichat_unit_assert_true(
-        str_contains($e->getMessage(), 'Guest session is invalid.'),
+        str_contains($e->getMessage(), 'Essa sessão de convidado não é mais válida.'),
         'Throws invalid guest session exception'
     );
     glpichat_unit_pass('Throws invalid guest session exception');
@@ -105,7 +105,7 @@ try {
     glpichat_unit_fail('Should throw exception for expired session');
 } catch (RuntimeException $e) {
     glpichat_unit_assert_true(
-        str_contains($e->getMessage(), 'Guest session is invalid.'),
+        str_contains($e->getMessage(), 'Essa sessão de convidado não é mais válida.'),
         'Throws unified invalid session exception on expired session (G4)'
     );
     glpichat_unit_assert_true($mockDB->update_called, 'Updates participant table to set left_at and clear session token');

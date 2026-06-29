@@ -67,7 +67,7 @@ try {
     glpichat_unit_fail('Invite input must reject invalid ticket id');
 } catch (RuntimeException $error) {
     glpichat_unit_assert_true(
-        str_contains($error->getMessage(), 'Invalid invite parameters.'),
+        str_contains($error->getMessage(), 'Parâmetros de convite inválidos.'),
         'Invite input rejects invalid ticket id with canonical message'
     );
     glpichat_unit_pass('Invite input rejects invalid ticket id with canonical message');
@@ -79,7 +79,7 @@ try {
     glpichat_unit_fail('Invite input must reject empty guest_name');
 } catch (RuntimeException $error) {
     glpichat_unit_assert_true(
-        str_contains($error->getMessage(), 'Invalid invite parameters.'),
+        str_contains($error->getMessage(), 'Parâmetros de convite inválidos.'),
         'Invite input rejects empty guest_name with canonical message'
     );
     glpichat_unit_pass('Invite input rejects empty guest_name with canonical message');
@@ -91,7 +91,7 @@ try {
     glpichat_unit_fail('Invite input must reject whitespace-only guest_name');
 } catch (RuntimeException $error) {
     glpichat_unit_assert_true(
-        str_contains($error->getMessage(), 'Invalid invite parameters.'),
+        str_contains($error->getMessage(), 'Parâmetros de convite inválidos.'),
         'Invite input rejects whitespace-only guest_name with canonical message'
     );
     glpichat_unit_pass('Invite input rejects whitespace-only guest_name with canonical message');

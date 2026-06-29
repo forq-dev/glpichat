@@ -132,7 +132,7 @@ function userPresenceSeedValidSession(): int
     return (int) $row['users_id'];
 }
 
-$tickets_id = 1;
+$tickets_id = (int) (getenv('GLPICHAT_TICKET_ID') ?: 1);
 $users_id = userPresenceSeedValidSession();
 $public_rooms_id = glpichat_room_id($tickets_id, GLPICHAT_ROOM_PUBLIC);
 $internal_rooms_id = glpichat_room_id($tickets_id, GLPICHAT_ROOM_INTERNAL);

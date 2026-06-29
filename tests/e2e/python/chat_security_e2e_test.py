@@ -112,7 +112,7 @@ with sync_playwright() as playwright:
             chat_submit.click()
         upload_blocked_response = upload_blocked_info.value
         upload_blocked_json = upload_blocked_response.json()
-        if upload_blocked_response.status != 400 or "not allowed by GLPI" not in str(upload_blocked_json.get("error", "")):
+        if upload_blocked_response.status != 400 or "não é permitido pelo GLPI" not in str(upload_blocked_json.get("error", "")):
             fail(
                 "Upload bloqueado de .html nao falhou como esperado: "
                 f"status={upload_blocked_response.status} body={upload_blocked_json}"

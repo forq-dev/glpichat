@@ -27,7 +27,7 @@ try {
     glpichat_unit_fail('Send input must reject invalid ticket id');
 } catch (RuntimeException $error) {
     glpichat_unit_assert_true(
-        str_contains($error->getMessage(), 'Invalid message parameters.'),
+        str_contains($error->getMessage(), 'Parâmetros de mensagem inválidos.'),
         'Send input rejects invalid ticket id with canonical message'
     );
     glpichat_unit_pass('Send input rejects invalid ticket id with canonical message');
@@ -40,7 +40,7 @@ foreach (['admin', 'guest', '', 'PUBLIC', 'INTERNAL'] as $bad_room_type) {
         glpichat_unit_fail("Send input must reject room_type '{$bad_room_type}'");
     } catch (RuntimeException $error) {
         glpichat_unit_assert_true(
-            str_contains($error->getMessage(), 'Invalid message parameters.'),
+            str_contains($error->getMessage(), 'Parâmetros de mensagem inválidos.'),
             "Send input rejects room_type '{$bad_room_type}' with canonical message"
         );
         glpichat_unit_pass("Send input rejects room_type '{$bad_room_type}' with canonical message");
@@ -79,7 +79,7 @@ try {
     glpichat_unit_fail('Upload input must reject invalid room type');
 } catch (RuntimeException $error) {
     glpichat_unit_assert_true(
-        str_contains($error->getMessage(), 'Invalid upload parameters.'),
+        str_contains($error->getMessage(), 'Parâmetros de upload inválidos.'),
         'Upload input rejects invalid room type with canonical message'
     );
     glpichat_unit_pass('Upload input rejects invalid room type with canonical message');

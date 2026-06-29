@@ -12,14 +12,19 @@ export const MOBILE_MAX_OPEN = 1;
 export const VALID_POSITIONS = ["bottom-right", "bottom-left", "top-left", "top-right"];
 export const SAFE_BOTTOM_MARGIN_PX = 8;
 export const TERMINAL_TICKET_STATUSES = new Set([5, 6]);
-// Prefixo de todas as URLs do plugin (assets e endpoints).
-// Deriva de CFG_GLPI.root_doc para funcionar quando o GLPI esta instalado
-// em subdiretorio (ex.: /glpi). Em paginas onde CFG_GLPI nao existe (convidado),
-// cai no caminho relativo a raiz, preservando o comportamento anterior.
-export const pluginBase =
-  (typeof window !== "undefined" && window.CFG_GLPI && window.CFG_GLPI.root_doc
+// Raiz de instalacao do GLPI (CFG_GLPI.root_doc), sem o caminho do plugin.
+// Necessario para montar URLs do core (ex.: /front/document.send.php) que devem
+// respeitar o subdiretorio de instalacao (ex.: /glpi). Em paginas onde CFG_GLPI
+// nao existe (convidado), cai em "" preservando o comportamento relativo a raiz.
+export const rootDoc =
+  typeof window !== "undefined" && window.CFG_GLPI && window.CFG_GLPI.root_doc
     ? window.CFG_GLPI.root_doc
-    : "") + "/plugins/glpichat";
+    : "";
+
+// Prefixo de todas as URLs do plugin (assets e endpoints).
+// Reutiliza rootDoc para funcionar quando o GLPI esta instalado em subdiretorio
+// (ex.: /glpi). O valor final permanece identico ao anterior: root_doc + "/plugins/glpichat".
+export const pluginBase = rootDoc + "/plugins/glpichat";
 
 /**
  * Validate if room type is valid

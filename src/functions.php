@@ -48,6 +48,30 @@ function glpichat_current_user_id(): int
     return $users_id;
 }
 
+/**
+ * Validates a candidate external followup user id at config save time.
+ *
+ * Returns true when the value is acceptable for storage:
+ *  - 0 (or empty) means "not set" and is allowed.
+ *  - any positive value must reference an existing, non-deleted user.
+ *
+ * Returns false when a positive id does not match a valid user, so the caller
+ * can reject the save and surface an error instead of persisting a dangling id.
+ */
+function glpichat_is_valid_external_followup_user_id(int $users_id): bool
+{
+    if ($users_id <= 0) {
+        return true;
+    }
+
+    $user = new User();
+    if (!$user->getFromDB($users_id)) {
+        return false;
+    }
+
+    return (int) $user->fields['is_deleted'] !== 1;
+}
+
 function glpichat_external_followup_user_id(): int
 {
     $value = Config::getConfigurationValue('plugin:glpichat', 'external_followup_user_id');

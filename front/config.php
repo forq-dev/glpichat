@@ -12,6 +12,18 @@ if (isset($_POST['update'])) {
 
     $valid_positions = ['bottom-right', 'bottom-left', 'top-left', 'top-right'];
 
+    // Validate the external followup user: 0/empty means "not set" (allowed and
+    // stored as 0); any other value must reference an existing, non-deleted user.
+    $external_followup_user_id = (int) ($_POST['external_followup_user_id'] ?? 0);
+    if (!glpichat_is_valid_external_followup_user_id($external_followup_user_id)) {
+        Session::addMessageAfterRedirect(
+            __('O usuário selecionado para mensagens de convidados externos não existe.', 'glpichat'),
+            false,
+            ERROR
+        );
+        Html::back();
+    }
+
     Config::setConfigurationValues('plugin:glpichat', [
         // Bloco A — Polling & Sincronização
         'poll_focused_ms'              => (string) max(1000, min(30000, (int)$_POST['poll_focused_ms'])),
@@ -44,7 +56,7 @@ if (isset($_POST['update'])) {
         'messages_retention_days'      => (string) max(30, min(1825, (int)$_POST['messages_retention_days'])),
         'auditlogs_retention_days'     => (string) max(30, min(730, (int)$_POST['auditlogs_retention_days'])),
         // Outros
-        'external_followup_user_id'    => (string)(int)$_POST['external_followup_user_id'],
+        'external_followup_user_id'    => (string) $external_followup_user_id,
     ]);
     Html::back();
 }

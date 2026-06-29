@@ -47,7 +47,7 @@ foreach (['Chat room not found.', 'User cannot read this room.'] as $raw_message
         glpichat_unit_fail('Widget access helper must collapse room lookup and ACL failures.');
     } catch (RuntimeException $error) {
         glpichat_unit_assert_same(
-            'Access denied.',
+            'Acesso negado.',
             $error->getMessage(),
             'Widget access helper returns unified opaque message (F6: no oracle for room existence)'
         );

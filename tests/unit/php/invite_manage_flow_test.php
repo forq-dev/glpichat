@@ -85,7 +85,7 @@ try {
     glpichat_unit_fail('Invite guard must reject missing invite');
 } catch (RuntimeException $error) {
     glpichat_unit_assert_true(
-        str_contains($error->getMessage(), 'Invite not found.'),
+        str_contains($error->getMessage(), 'Convite não encontrado.'),
         'Invite guard rejects missing invite with canonical message'
     );
     glpichat_unit_pass('Invite guard rejects missing invite with canonical message');
@@ -97,7 +97,7 @@ try {
     glpichat_unit_fail('Invite guard must reject empty array invite');
 } catch (RuntimeException $error) {
     glpichat_unit_assert_true(
-        str_contains($error->getMessage(), 'Invite not found.'),
+        str_contains($error->getMessage(), 'Convite não encontrado.'),
         'Invite guard rejects empty array invite with canonical message'
     );
     glpichat_unit_pass('Invite guard rejects empty array invite with canonical message');
@@ -258,7 +258,7 @@ try {
     glpichat_unit_fail('G5: Reissue of revoked invite must throw RuntimeException');
 } catch (RuntimeException $error) {
     glpichat_unit_assert_true(
-        str_contains($error->getMessage(), 'Revoked invite cannot be reissued.'),
+        str_contains($error->getMessage(), 'Convite revogado não pode ser reemitido.'),
         'G5: Reissue of revoked invite is rejected with canonical message'
     );
     glpichat_unit_pass('G5: Reissue of revoked invite is rejected with canonical message');

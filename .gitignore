@@ -23,3 +23,10 @@ test_glpi_chat.py
 .mcp.json
 .claude
 .env
+*.log
+*.txt
+
+# Esteira de testes (logs por execucao) e artefatos temporarios
+tests/logs/
+/_*.log
+/_*.txt

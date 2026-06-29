@@ -103,6 +103,8 @@ function plugin_glpichat_uninstall(): bool
 {
     global $DB;
 
+    glpichat_uninstall_default_notifications();
+
     foreach (array_reverse(glpichat_table_names()) as $table) {
         if ($DB->tableExists($table)) {
             $DB->doQuery(sprintf('DROP TABLE `%s`', $table));

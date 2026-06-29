@@ -112,7 +112,7 @@ try {
 } catch (RuntimeException $error) {
     $caught = true;
     glpichat_unit_assert_same(
-        'Maximum active invites per ticket reached.',
+        'Limite máximo de convites ativos por chamado atingido.',
         $error->getMessage(),
         'glpichat_create_invite_use_case throws when active count equals max_invites_per_ticket'
     );
@@ -148,7 +148,7 @@ try {
 } catch (RuntimeException $error) {
     $caught = true;
     glpichat_unit_assert_same(
-        'Maximum active invites per ticket reached.',
+        'Limite máximo de convites ativos por chamado atingido.',
         $error->getMessage(),
         'glpichat_create_invite_use_case throws when active count exceeds custom max_invites_per_ticket'
     );
@@ -266,7 +266,7 @@ try {
 } catch (RuntimeException $error) {
     $caught = true;
     glpichat_unit_assert_same(
-        'Maximum active invites per ticket reached.',
+        'Limite máximo de convites ativos por chamado atingido.',
         $error->getMessage(),
         'glpichat_create_invite_use_case throws at boundary when count=max=1'
     );

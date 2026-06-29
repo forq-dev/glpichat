@@ -31,7 +31,7 @@ try {
     glpichat_unit_fail('Accept invite guard must reject null invite');
 } catch (RuntimeException $error) {
     glpichat_unit_assert_true(
-        str_contains($error->getMessage(), 'Invite is invalid, expired, accepted, or revoked.'),
+        str_contains($error->getMessage(), 'Convite inválido, expirado, já utilizado ou revogado.'),
         'Accept invite guard rejects null invite with canonical message'
     );
     glpichat_unit_pass('Accept invite guard rejects null invite with canonical message');
@@ -43,7 +43,7 @@ try {
     glpichat_unit_fail('Accept invite guard must reject empty array invite');
 } catch (RuntimeException $error) {
     glpichat_unit_assert_true(
-        str_contains($error->getMessage(), 'Invite is invalid, expired, accepted, or revoked.'),
+        str_contains($error->getMessage(), 'Convite inválido, expirado, já utilizado ou revogado.'),
         'Accept invite guard rejects empty array invite with canonical message'
     );
     glpichat_unit_pass('Accept invite guard rejects empty array invite with canonical message');
@@ -64,7 +64,7 @@ try {
     glpichat_unit_fail('Guest participant guard must reject invalid participant');
 } catch (RuntimeException $error) {
     glpichat_unit_assert_true(
-        str_contains($error->getMessage(), 'Guest session is invalid.'),
+        str_contains($error->getMessage(), 'Sessão de acesso inválida ou expirada.'),
         'Guest participant guard rejects invalid participant with canonical message'
     );
     glpichat_unit_pass('Guest participant guard rejects invalid participant with canonical message');
@@ -186,7 +186,7 @@ try {
     glpichat_unit_fail('Race condition: accept use case must throw when mark_invite_accepted returns false');
 } catch (RuntimeException $error) {
     glpichat_unit_assert_true(
-        str_contains($error->getMessage(), 'Invite is invalid, expired, accepted, or revoked.'),
+        str_contains($error->getMessage(), 'Convite inválido, expirado, já utilizado ou revogado.'),
         'Race condition: exception message is canonical'
     );
     glpichat_unit_pass('Race condition: exception message is canonical');

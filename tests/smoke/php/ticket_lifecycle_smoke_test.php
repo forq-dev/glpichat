@@ -14,7 +14,6 @@ use Symfony\Component\HttpFoundation\Response;
 $loader = require dirname(__DIR__, 5) . '/vendor/autoload.php';
 $loader->addPsr4('GlpiPlugin\\Glpichat\\', dirname(__DIR__, 3) . '/src/');
 
-const TASK3_SMOKE_TICKET_ID = 1;
 const TASK3_SMOKE_GROUP_NAME = 'test';
 
 $kernel = new \Glpi\Kernel\Kernel();
@@ -104,7 +103,7 @@ function task3MaxEventId(): int
 
 function task3SmokeTicketId(): int
 {
-    return TASK3_SMOKE_TICKET_ID;
+    return (int) (getenv('GLPICHAT_TICKET_ID') ?: 1);
 }
 
 function task3TicketSnapshot(int $tickets_id): array
@@ -500,7 +499,7 @@ try {
             'content'          => 'task3 archived send',
         ]
     ));
-    task3AssertJsonError($send_response, 'Chat is archived', 'SendController bloqueia ticket solucionado');
+    task3AssertJsonError($send_response, 'O chat está arquivado', 'SendController bloqueia ticket solucionado');
 
     $upload_csrf = Session::getNewCSRFToken();
     $upload_file = new UploadedFile(
@@ -521,7 +520,7 @@ try {
         [],
         ['file' => $upload_file]
     ));
-    task3AssertJsonError($upload_response, 'Chat is archived', 'UploadController bloqueia ticket solucionado');
+    task3AssertJsonError($upload_response, 'O chat está arquivado', 'UploadController bloqueia ticket solucionado');
 
     $DB->insert('glpi_plugin_glpichat_participants', [
         'rooms_id'            => $public_room_id,
@@ -559,7 +558,7 @@ try {
         ],
         task3GuestCookie($guest_session_token)
     ));
-    task3AssertJsonError($guest_send_response, 'Chat is archived', 'GuestController bloqueia envio em ticket solucionado');
+    task3AssertJsonError($guest_send_response, 'O chat está arquivado', 'GuestController bloqueia envio em ticket solucionado');
 
     $guest_upload_file = new UploadedFile(
         dirname(__DIR__, 2) . '/fixtures/allowed_upload.txt',
@@ -575,7 +574,7 @@ try {
         task3GuestCookie($guest_session_token),
         ['file' => $guest_upload_file]
     ));
-    task3AssertJsonError($guest_upload_response, 'Chat is archived', 'GuestController bloqueia upload em ticket solucionado');
+    task3AssertJsonError($guest_upload_response, 'O chat está arquivado', 'GuestController bloqueia upload em ticket solucionado');
 
     $DB->update('glpi_tickets', [
         'status' => CommonITILObject::CLOSED,
@@ -586,7 +585,7 @@ try {
         static function () use ($tickets_id): void {
             glpichat_assert_ticket_open_for_chat($tickets_id);
         },
-        'Chat is archived',
+        'O chat está arquivado',
         'Helper bloqueia ticket fechado'
     );
 

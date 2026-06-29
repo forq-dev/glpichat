@@ -56,7 +56,7 @@ function task2Json(Response $response): array
 
 global $DB;
 
-$tickets_id = 1; // Chamado de teste padrão do smoke
+$tickets_id = (int) (getenv('GLPICHAT_TICKET_ID') ?: 1); // Chamado da esteira (fallback: 1 standalone)
 $public_room_id = glpichat_room_id($tickets_id, GLPICHAT_ROOM_PUBLIC);
 
 $guest_session_token = bin2hex(random_bytes(16));
@@ -146,7 +146,7 @@ try {
     task2Assert($expired_sync_response->getStatusCode() === 400, 'Sync deve retornar 400 Bad Request para participante expirado');
     $expired_sync_json = task2Json($expired_sync_response);
     task2Assert(
-        str_contains((string) ($expired_sync_json['error'] ?? ''), 'Guest session is invalid.'),
+        str_contains((string) ($expired_sync_json['error'] ?? ''), 'Essa sessão de convidado não é mais válida.'),
         'Mensagem de erro deve indicar expiração por inatividade'
     );
 

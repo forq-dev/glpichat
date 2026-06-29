@@ -103,7 +103,7 @@ try {
 } catch (RuntimeException $error) {
     $caught = true;
     glpichat_unit_assert_same(
-        'Ticket not found.',
+        'Chamado não encontrado.',
         $error->getMessage(),
         'glpichat_ticket_or_fail throws RuntimeException with canonical message when ticket is missing'
     );

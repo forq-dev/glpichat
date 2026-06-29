@@ -737,6 +737,60 @@ function glpichat_ensure_notification_mode(int $notification_id, int $template_i
     }
 }
 
+/**
+ * Removes every notification object created by glpichat_install_default_notifications():
+ * notification definitions, their mode/template relations, their targets, the two
+ * notification templates and their translations.
+ *
+ * Mirrors the install side so that an uninstall leaves no orphaned `GLPI CHAT - *`
+ * definitions/templates/translations/targets behind.
+ */
+function glpichat_uninstall_default_notifications(): void
+{
+    // 1. Notification definitions (purge cascades to targets and mode/template relations).
+    $notification = new Notification();
+    foreach (glpichat_default_notification_events() as $event) {
+        $definitions = $notification->find([
+            'name'     => glpichat_default_notification_definition_name($event),
+            'itemtype' => Ticket::class,
+            'event'    => $event,
+        ]);
+        if (!is_array($definitions)) {
+            continue;
+        }
+        foreach ($definitions as $row) {
+            $notification_id = (int) ($row['id'] ?? 0);
+            if ($notification_id <= 0) {
+                continue;
+            }
+            $notification->delete(['id' => $notification_id], true);
+        }
+    }
+
+    // 2. Notification templates (purge cascades to translations).
+    $template = new NotificationTemplate();
+    $template_names = [
+        glpichat_default_notification_template_name(),
+        glpichat_event_notification_template_name(),
+    ];
+    foreach ($template_names as $template_name) {
+        $templates = $template->find([
+            'name'     => $template_name,
+            'itemtype' => Ticket::class,
+        ]);
+        if (!is_array($templates)) {
+            continue;
+        }
+        foreach ($templates as $row) {
+            $template_id = (int) ($row['id'] ?? 0);
+            if ($template_id <= 0) {
+                continue;
+            }
+            $template->delete(['id' => $template_id], true);
+        }
+    }
+}
+
 function glpichat_ensure_default_notification_targets(int $notification_id): void
 {
     $target = new NotificationTarget();

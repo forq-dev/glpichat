@@ -162,7 +162,7 @@ assertThrows(
         $file = new UploadedFile($blockedFixture, 'blocked_upload.php', 'application/x-php', null, true);
         glpichat_upload_document(1, $file, true);
     },
-    'not allowed by GLPI',
+    'não é permitido pelo GLPI',
     'Upload com extensão bloqueada é rejeitado'
 );
 assertNoUploadArtifacts($blockedBasename, 'Upload bloqueado não deixa artefato em disco');
@@ -174,7 +174,7 @@ assertThrows(
         $file = new UploadedFile($blockedHtmlFixture, 'blocked_upload.html', 'text/html', null, true);
         glpichat_upload_document(1, $file, true);
     },
-    'not allowed by GLPI',
+    'não é permitido pelo GLPI',
     'Upload de .html bloqueado é rejeitado'
 );
 assertNoUploadArtifacts($blockedHtmlBasename, 'Upload de .html bloqueado não deixa artefato em disco');
@@ -204,7 +204,7 @@ assertThrows(
         $file = new OversizedUploadedFile($oversizedPath, $oversizedName, $effectiveMaxSize + 1);
         glpichat_upload_document(1, $file, true);
     },
-    'exceeds the',
+    'excede o limite de tamanho',
     'Upload acima do limite é rejeitado'
 );
 @unlink($oversizedPath);

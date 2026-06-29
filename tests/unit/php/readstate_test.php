@@ -80,7 +80,7 @@ try {
     glpichat_unit_fail('Readstate participant guard must reject missing participant');
 } catch (RuntimeException $error) {
     glpichat_unit_assert_true(
-        str_contains($error->getMessage(), 'Chat participant not found.'),
+        str_contains($error->getMessage(), 'Participante do chat não encontrado.'),
         'Readstate participant guard keeps canonical error'
     );
     glpichat_unit_pass('Readstate participant guard keeps canonical error');

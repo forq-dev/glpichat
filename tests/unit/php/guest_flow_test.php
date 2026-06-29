@@ -93,7 +93,7 @@ try {
     glpichat_unit_fail('Guest message content must reject blank payload');
 } catch (RuntimeException $error) {
     glpichat_unit_assert_true(
-        str_contains($error->getMessage(), 'Invalid message content.'),
+        str_contains($error->getMessage(), 'Conteúdo da mensagem inválido.'),
         'Guest message content rejects blank payload with canonical message'
     );
     glpichat_unit_pass('Guest message content rejects blank payload with canonical message');
@@ -118,7 +118,7 @@ try {
     glpichat_unit_fail('Guest room payload must reject missing ticket id');
 } catch (RuntimeException $error) {
     glpichat_unit_assert_true(
-        str_contains($error->getMessage(), 'Guest room not found.'),
+        str_contains($error->getMessage(), 'Sala de chat não encontrada.'),
         'Guest room payload rejects missing ticket id with canonical message'
     );
     glpichat_unit_pass('Guest room payload rejects missing ticket id with canonical message');

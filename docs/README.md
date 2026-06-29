@@ -38,3 +38,4 @@ Para instalação e configuração geral, consulte o [README principal](../READM
 | Doc | Quando consultar |
 |-----|-----------------|
 | [Sistema de Permissões](architecture/glpi-integration/permissions.md) | Ao adicionar um novo direito, diagnosticar permissão não funcionando no Helpdesk ou entender a migração de direitos |
+| [Ambiente e Configuração](architecture/glpi-integration/environment-and-config.md) | Pré-requisitos de deploy (url_base, usuário de followup externo, direitos, notificações) e tabela de configs do plugin |

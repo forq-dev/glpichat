@@ -123,6 +123,6 @@ curl -sS -b "$cookie_file" \
   -F "room_type=$room_type" \
   -F "file=@$plugin_root/tests/fixtures/blocked_upload.html;type=text/html" \
   "$base_url/plugins/glpichat/Upload" -o "$upload_blocked_json"
-assert_contains "$upload_blocked_json" "not allowed by GLPI" "POST /Upload com .html bloqueado falha"
+assert_contains "$upload_blocked_json" "permitido pelo GLPI" "POST /Upload com .html bloqueado falha"
 
 printf '[PASS] Smoke HTTP autenticado concluido\n'

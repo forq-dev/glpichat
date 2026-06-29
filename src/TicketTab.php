@@ -85,6 +85,8 @@ final class TicketTab extends CommonGLPI
 
                     var csrf = root.dataset.csrf || '';
                     var ticketId = Number(root.dataset.ticketId || '0');
+                    var rootDoc = (window.CFG_GLPI && window.CFG_GLPI.root_doc) ? window.CFG_GLPI.root_doc : '';
+                    var pluginBase = rootDoc + '/plugins/glpichat';
                     var canCreate = root.dataset.canCreate === '1';
                     var canUpdate = root.dataset.canUpdate === '1';
                     if (!ticketId) {
@@ -204,7 +206,7 @@ final class TicketTab extends CommonGLPI
                             var btn = createForm.querySelector('[data-role=\\'submit-btn\\']');
                             btn.disabled = true;
                             try {
-                                var created = await postForm('/plugins/glpichat/Invite', {
+                                var created = await postForm(pluginBase + '/Invite', {
                                     tickets_id: ticketId,
                                     guest_name: guestName,
                                     guest_email: guestEmail
@@ -240,7 +242,7 @@ final class TicketTab extends CommonGLPI
                     root.appendChild(table);
 
                     var render = async function () {
-                        var listData = await fetchJson('/plugins/glpichat/Invite/List?tickets_id=' + ticketId, { credentials: 'same-origin' });
+                        var listData = await fetchJson(pluginBase + '/Invite/List?tickets_id=' + ticketId, { credentials: 'same-origin' });
 
                         // Update only the tbody to prevent flickering and input loss
                         tbody.innerHTML = '';
@@ -272,7 +274,7 @@ final class TicketTab extends CommonGLPI
                                 reissueBtn.textContent = 'Reemitir';
                                 reissueBtn.addEventListener('click', async function () {
                                     try {
-                                        var result = await postForm('/plugins/glpichat/Invite/Reissue', { invite_id: invite.id });
+                                        var result = await postForm(pluginBase + '/Invite/Reissue', { invite_id: invite.id });
                                         window.alert('Novo link: ' + result.url);
                                         await render();
                                     } catch (e) {
@@ -289,7 +291,7 @@ final class TicketTab extends CommonGLPI
                                 revokeBtn.textContent = 'Cancelar convite';
                                 revokeBtn.addEventListener('click', async function () {
                                     if (window.confirm('Tem certeza que deseja cancelar este convite?')) {
-                                        await postForm('/plugins/glpichat/Invite/Revoke', { invite_id: invite.id });
+                                        await postForm(pluginBase + '/Invite/Revoke', { invite_id: invite.id });
                                         await render();
                                     }
                                 });
@@ -303,7 +305,7 @@ final class TicketTab extends CommonGLPI
                                 disconnectBtn.textContent = 'Encerrar chat';
                                 disconnectBtn.addEventListener('click', async function () {
                                     if (window.confirm('Tem certeza que deseja encerrar o chat ativo?')) {
-                                        await postForm('/plugins/glpichat/Invite/Revoke', { invite_id: invite.id });
+                                        await postForm(pluginBase + '/Invite/Revoke', { invite_id: invite.id });
                                         await render();
                                     }
                                 });

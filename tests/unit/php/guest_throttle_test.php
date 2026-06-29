@@ -115,7 +115,7 @@ try {
 } catch (RuntimeException $error) {
     glpichat_unit_assert_same(429, $error->getCode(), 'Throttle throws with code 429');
     glpichat_unit_assert_true(
-        str_contains($error->getMessage(), 'Too many requests.'),
+        str_contains($error->getMessage(), 'Muitas requisições. Tente novamente em instantes.'),
         'Throttle rejects recent send with canonical message'
     );
     glpichat_unit_pass('Throttle rejects request when last_send_at is 1 second ago with code 429');
@@ -187,7 +187,7 @@ try {
 } catch (RuntimeException $error) {
     glpichat_unit_assert_same(429, $error->getCode(), 'Rate limit throws with code 429 at threshold');
     glpichat_unit_assert_true(
-        str_contains($error->getMessage(), 'Too many attempts. Try again later.'),
+        str_contains($error->getMessage(), 'Muitas tentativas. Tente novamente mais tarde.'),
         'Rate limit throws canonical message at threshold'
     );
     glpichat_unit_pass('Rate limit blocks request when failure count is exactly 10 with code 429');

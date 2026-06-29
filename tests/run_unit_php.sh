@@ -104,11 +104,18 @@ run_smoke_http() {
 }
 
 run_e2e() {
-  local e2e_runner="$plugin_root/tests/e2e/python/chat_security_e2e_test.py"
-  require_file "$e2e_runner"
   require_command python3
   log_step "Running Python E2E tests"
-  GLPICHAT_BASE_URL="$base_url" python3 "$e2e_runner"
+  shopt -s nullglob
+  local e2e_files=("$plugin_root"/tests/e2e/python/*.py)
+  if [[ ${#e2e_files[@]} -eq 0 ]]; then
+    printf '[FAIL] Nenhum arquivo E2E encontrado em: %s\n' "$plugin_root/tests/e2e/python/*.py" >&2
+    exit 1
+  fi
+  for e2e_runner in "${e2e_files[@]}"; do
+    printf -- '--- %s ---\n' "$(basename "$e2e_runner")"
+    GLPICHAT_BASE_URL="$base_url" python3 "$e2e_runner"
+  done
 }
 
 case "$suite" in

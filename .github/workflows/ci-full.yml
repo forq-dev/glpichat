@@ -123,7 +123,32 @@ jobs:
             libgbm1 \
             libpango-1.0-0 \
             libcairo2 \
-            libasound2
+            libasound2 
+
+Run pip3 install --quiet playwright
+  pip3 install --quiet playwright
+  # NÃO roda "playwright install chromium" — o E2E usa o binário do
+  # sistema via executable_path="/usr/bin/chromium" (já instalado acima).
+  # Apenas garante que as libs de sistema necessárias estão presentes.
+  sudo apt-get install -y --no-install-recommends \
+    libnss3 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libxkbcommon0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libpango-1.0-0 \
+    libcairo2 \
+    libasound2 \ 
+    libgcc1 \
+    liboss4-salsa-asound2 \
+    4.2-build2020-1ubuntu3.1 \
+    libasound2t64 \
+    1.2.11-1ubuntu0.2 
 
       # ------------------------------------------------------------------
       # 4. Subir os containers

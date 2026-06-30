@@ -26,6 +26,15 @@ jobs:
       - name: "Checkout"
         uses: "actions/checkout@v4"
 
+      - name: "Setup Node.js and install JS dependencies"
+        uses: "actions/setup-node@v4"
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: "Install JS dependencies"
+        run: npm ci
+
       - name: "Install Chromium and Python deps"
         run: |
           sudo apt-get update -qq

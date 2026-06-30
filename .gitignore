@@ -30,3 +30,4 @@ test_glpi_chat.py
 tests/logs/
 /_*.log
 /_*.txt
+/ci-errors/

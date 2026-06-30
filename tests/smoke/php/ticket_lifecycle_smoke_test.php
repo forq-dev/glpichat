@@ -368,6 +368,7 @@ $baseline_event_id = task3MaxEventId();
 
 $added_user_id = 0;
 $added_group_id = 0;
+$created_group_id = 0;  // grupo criado pelo smoke (precisa de cleanup)
 $user_change_mode = 'add';
 $group_change_mode = 'add';
 $should_test_user_assignment = true;
@@ -382,7 +383,14 @@ try {
         $candidate_user_id = task3FirstAssignedUser($tickets_id);
         $user_change_mode = 'remove';
     }
-    task3Assert($candidate_group_id > 0, sprintf('Grupo de teste "%s" deve existir', TASK3_SMOKE_GROUP_NAME));
+    // Se o grupo de teste nao existe, criá-lo agora (instalacoes limpas nao tem grupos pre-criados).
+    if ($candidate_group_id <= 0) {
+        $group = new Group();
+        $candidate_group_id = (int) $group->add(['name' => TASK3_SMOKE_GROUP_NAME, 'entities_id' => 0]);
+        task3Assert($candidate_group_id > 0, sprintf('Nao foi possivel criar grupo de teste "%s"', TASK3_SMOKE_GROUP_NAME));
+        $created_group_id = $candidate_group_id;
+    }
+    task3Assert($candidate_group_id > 0, sprintf('Grupo de teste "%s" deve existir ou ter sido criado', TASK3_SMOKE_GROUP_NAME));
     if (task3TicketHasAssignedGroup($tickets_id, $candidate_group_id)) {
         $group_change_mode = 'remove';
     }
@@ -627,6 +635,11 @@ try {
         $DB->delete('glpi_plugin_glpichat_events', [
             'id' => $event_ids_to_cleanup,
         ]);
+    }
+
+    // Remove o grupo criado pelo smoke (se foi criado aqui, não existia antes).
+    if ($created_group_id > 0) {
+        $DB->delete('glpi_groups', ['id' => $created_group_id]);
     }
 
     $DB->update('glpi_tickets', [

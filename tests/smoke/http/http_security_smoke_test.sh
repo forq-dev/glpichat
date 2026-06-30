@@ -90,7 +90,7 @@ curl -sS -b "$cookie_file" \
   -H "X-Requested-With: XMLHttpRequest" \
   -d "tickets_id=$ticket_id&room_type=$room_type&content=smoke-sem-csrf" \
   "$base_url/plugins/glpichat/Send" -o "$send_no_csrf_json"
-assert_contains_any "$send_no_csrf_json" "Invalid CSRF token." "A ação que você requisitou não é permitida." "POST /Send sem CSRF falha"
+assert_contains_any "$send_no_csrf_json" "Invalid CSRF token." "The action you have requested is not allowed." "POST /Send sem CSRF falha"
 
 curl -sS -b "$cookie_file" \
   -H "X-Requested-With: XMLHttpRequest" \

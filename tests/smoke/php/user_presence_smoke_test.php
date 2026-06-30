@@ -123,9 +123,16 @@ function userPresenceSeedValidSession(): int
     $_SESSION['valid_id'] = session_id();
     $_SESSION['glpiname'] = (string) $row['user_name'];
     $_SESSION['glpiID'] = (int) $row['users_id'];
+    // Inicializa os perfis e muda para o perfil correto para que os direitos
+    // do plugin sejam carregados — necessario em instalacoes limpas onde
+    // glpiactiveprofile nao esta pre-carregado.
     Session::initEntityProfiles((int) $row['users_id']);
     Session::changeProfile((int) $row['profiles_id']);
-    $_SESSION['glpiactiveprofile']['plugin_glpichat_public'] = 1 | 4; // READ | CREATE
+    // Garante que o direito do canal publico esta disponivel na sessao.
+    if (!isset($_SESSION['glpiactiveprofile']['plugin_glpichat_public'])
+        || $_SESSION['glpiactiveprofile']['plugin_glpichat_public'] === 0) {
+        $_SESSION['glpiactiveprofile']['plugin_glpichat_public'] = 1 | 4; // READ | CREATE
+    }
     $_SESSION['glpiactive_entity'] = (int) ($row['entities_id'] ?? 0);
     $_SESSION['glpigroups'] = [];
 

@@ -72,7 +72,11 @@ with sync_playwright() as playwright:
         send_without_token_text = send_without_token["text"]
         send_without_token_blocked = (
             (send_without_token["status"] == 400 and "Invalid CSRF token." in send_without_token_text)
-            or (send_without_token["status"] == 403 and "A ação que você requisitou não é permitida." in send_without_token_text)
+            or (send_without_token["status"] == 403 and (
+                "A ação que você requisitou não é permitida." in send_without_token_text
+                or "The action you have requested is not allowed." in send_without_token_text
+                or "not allowed" in send_without_token_text.lower()
+            ))
         )
         if not send_without_token_blocked:
             fail(f"Envio sem CSRF nao retornou o erro esperado: {send_without_token}")

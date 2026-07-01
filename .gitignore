@@ -28,6 +28,8 @@ test_glpi_chat.py
 
 # Esteira de testes (logs por execucao) e artefatos temporarios
 tests/logs/
+tests/performance/logs/*
+!tests/performance/logs/.gitkeep
 /_*.log
 /_*.txt
 /ci-errors/

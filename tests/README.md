@@ -41,7 +41,15 @@ tests/
 ├── performance/
 │   ├── README.md
 │   ├── k6/
-│   │   └── chat_polling.js     # Suite k6 para polling e sync
+│   │   ├── chat_polling.js             # Baseline de polling leve (Widget/Poll + Guest/Sync)
+│   │   ├── polling_breakpoint.js       # Teto de Widget/Poll sob rampa
+│   │   ├── guest_polling_breakpoint.js # Teto de Guest/Sync sob rampa
+│   │   ├── rooms_scale.js              # N salas/pessoas simultâneas com sessões distintas
+│   │   ├── message_throughput.js       # Throughput de Send/Guest/Send
+│   │   ├── upload_throughput.js        # Uploads concorrentes (agente e convidado)
+│   │   ├── guest_onboarding_burst.js   # Rate limit de aceite de convite sob rajada
+│   │   ├── realistic_mix.js            # Mix ponderado de tráfego realista
+│   │   └── soak.js                     # Carga sustentada de longa duração
 │   └── run_k6.sh               # Runner local para carga/performance
 └── run_unit_php.sh             # Roteador principal das suítes de teste
 ```

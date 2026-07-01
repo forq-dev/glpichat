@@ -214,3 +214,5 @@ Para desenvolvedores, administradores de infraestrutura e técnicos que precisam
 * 🔄 [**Polling e Sincronização**](docs/architecture/flows/polling.md)
 * 🎨 [**Arquitetura do Frontend e Widget**](docs/architecture/frontend/widget.md)
 * 🔑 [**Sistema de Permissões (Integração GLPI)**](docs/architecture/glpi-integration/permissions.md)
+* 🧪 [**Suíte de Testes e QA**](tests/README.md)
+* 📈 [**Testes de Carga (k6) e Capacidade**](docs/architecture/performance/load-testing.md)

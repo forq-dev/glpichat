@@ -39,3 +39,8 @@ Para instalação e configuração geral, consulte o [README principal](../READM
 |-----|-----------------|
 | [Sistema de Permissões](architecture/glpi-integration/permissions.md) | Ao adicionar um novo direito, diagnosticar permissão não funcionando no Helpdesk ou entender a migração de direitos |
 | [Ambiente e Configuração](architecture/glpi-integration/environment-and-config.md) | Pré-requisitos de deploy (url_base, usuário de followup externo, direitos, notificações) e tabela de configs do plugin |
+
+### Performance
+| Doc | Quando consultar |
+|-----|-----------------|
+| [Testes de Carga (k6)](architecture/performance/load-testing.md) | Ao avaliar quantos usuários simultâneos o sistema suporta, rodar/interpretar a suíte k6 de novo, ou investigar degradação de latência sob carga |

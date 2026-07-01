@@ -156,6 +156,7 @@ printf '\n[INFO] Fase 0: criando participante guest via PHP (ticket_id=%s)...\n'
 cat > "$php_setup_script" <<PHPEOF
 <?php
 declare(strict_types=1);
+try {
 \$tickets_id = (int)(\$_ENV['TICKET_ID'] ?? 1);
 \$loader = require '/var/www/glpi/vendor/autoload.php';
 \$loader->addPsr4('GlpiPlugin\\\\Glpichat\\\\', '/var/www/glpi/plugins/glpichat/src/');
@@ -207,6 +208,10 @@ if (\$participant_id <= 0) { fwrite(STDERR, "[FAIL] insert participant\n"); exit
 echo "GUEST_SESSION_TOKEN={\$session_token}\n";
 echo "GUEST_PARTICIPANT_ID={\$participant_id}\n";
 echo "GUEST_INVITE_ID={\$invite_id}\n";
+} catch (\Throwable \$e) {
+    fwrite(STDERR, "[FAIL] Excecao no setup PHP: " . \$e->getMessage() . "\n" . \$e->getTraceAsString() . "\n");
+    exit(1);
+}
 PHPEOF
 
 docker cp "$php_setup_script" "${container_name}:/tmp/glpichat_guest_smoke_setup.php"

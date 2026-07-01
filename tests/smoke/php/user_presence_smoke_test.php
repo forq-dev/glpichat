@@ -31,8 +31,7 @@ function taskPass(string $message): void
 function taskAssert(bool $condition, string $message): void
 {
     if (!$condition) {
-        fwrite(STDERR, "[FAIL] {$message}\n");
-        exit(1);
+        throw new RuntimeException($message);
     }
 }
 
@@ -111,6 +110,7 @@ function userPresenceSeedValidSession(): int
             ],
         ],
         'WHERE' => [
+            'glpi_users.name'                 => 'glpi',
             'glpi_users.is_active'            => 1,
             'glpi_users.is_deleted'           => 0,
             'glpi_profiles_users.profiles_id' => ['>', 0],
@@ -118,7 +118,7 @@ function userPresenceSeedValidSession(): int
         'LIMIT' => 1,
     ])->current();
 
-    taskAssert(is_array($row), 'Sessao de teste precisa de um usuario GLPI ativo');
+    taskAssert(is_array($row), 'Sessao de teste precisa do usuario "glpi" (super-admin) ativo e com perfil valido');
 
     $_SESSION['valid_id'] = session_id();
     $_SESSION['glpiname'] = (string) $row['user_name'];
@@ -332,6 +332,9 @@ try {
     taskPass('Widget history expõe user_left após saída explícita via Widget/Leave');
 
     fwrite(STDOUT, "[PASS] Smoke de presenca de usuarios logados concluido\n");
+} catch (RuntimeException $error) {
+    fwrite(STDERR, "[FAIL] {$error->getMessage()}\n");
+    exit(1);
 } finally {
     // Cleanup
     if (isset($users_id) && isset($public_rooms_id) && isset($internal_rooms_id)) {

@@ -35,8 +35,7 @@ plugin_init_glpichat();
  */
 function task3Fail(string $message): void
 {
-    fwrite(STDERR, "[FAIL] {$message}\n");
-    exit(1);
+    throw new RuntimeException($message);
 }
 
 function task3Pass(string $message): void
@@ -598,6 +597,9 @@ try {
     );
 
     fwrite(STDOUT, "[PASS] Smoke da task 3 concluido\n");
+} catch (RuntimeException $error) {
+    fwrite(STDERR, "[FAIL] {$error->getMessage()}\n");
+    exit(1);
 } finally {
     if ($guest_participant_id > 0) {
         $DB->delete('glpi_plugin_glpichat_participants', ['id' => $guest_participant_id]);

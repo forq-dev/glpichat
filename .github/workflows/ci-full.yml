@@ -69,7 +69,7 @@ jobs:
             '      retries: 20' \
             '      start_period: 15s' \
             '  glpi:' \
-            '    image: "glpi/glpi:latest"' \
+            '    image: "glpi/glpi:11.0.7"' \
             '    container_name: "glpi"' \
             '    restart: "no"' \
             '    depends_on:' \
@@ -130,6 +130,33 @@ jobs:
             glpi:plugin:install --username=glpi glpichat
           docker exec glpi php /var/www/glpi/bin/console \
             glpi:plugin:activate glpichat
+
+      # GLPI marca is_uploadable=1 por padrao para o tipo de documento "HTML"
+      # (install/empty_data.php nao sobrescreve o DEFAULT da coluna). Isso nao
+      # e regressao de versao: nenhuma instalacao nova do GLPI bloqueia .html
+      # sem essa acao explicita. Os testes de seguranca do plugin assumem que
+      # extensoes perigosas estao bloqueadas, entao endurecemos aqui.
+      - name: "Harden document upload security (block dangerous extensions)"
+        run: |
+          cat > /tmp/glpichat_harden_doctypes.php <<'PHPEOF'
+          <?php
+          declare(strict_types=1);
+          require_once '/var/www/glpi/vendor/autoload.php';
+          (new \Glpi\Kernel\Kernel())->boot();
+          global $DB;
+          $blocked_exts = ['html', 'htm', 'svg', 'xhtml', 'shtml'];
+          $DB->update('glpi_documenttypes', ['is_uploadable' => 0], ['ext' => $blocked_exts]);
+          $rows = $DB->request([
+              'FROM'  => 'glpi_documenttypes',
+              'WHERE' => ['ext' => $blocked_exts],
+          ]);
+          foreach ($rows as $row) {
+              printf("  ext=%s is_uploadable=%d\n", $row['ext'], $row['is_uploadable']);
+          }
+          PHPEOF
+          docker cp /tmp/glpichat_harden_doctypes.php glpi:/tmp/glpichat_harden_doctypes.php
+          docker exec glpi php /tmp/glpichat_harden_doctypes.php
+          docker exec glpi rm -f /tmp/glpichat_harden_doctypes.php
 
       - name: "Run full test suite"
         run: bash tests/run_full_suite.sh "${{ env.GLPI_BASE_URL }}"

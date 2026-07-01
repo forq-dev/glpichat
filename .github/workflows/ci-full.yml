@@ -156,7 +156,7 @@ jobs:
           PHPEOF
           docker cp /tmp/glpichat_harden_doctypes.php glpi:/tmp/glpichat_harden_doctypes.php
           docker exec glpi php /tmp/glpichat_harden_doctypes.php
-          docker exec glpi rm -f /tmp/glpichat_harden_doctypes.php
+          docker exec glpi rm -f /tmp/glpichat_harden_doctypes.php || true
 
       - name: "Run full test suite"
         run: bash tests/run_full_suite.sh "${{ env.GLPI_BASE_URL }}"

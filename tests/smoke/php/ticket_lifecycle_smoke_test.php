@@ -468,8 +468,10 @@ try {
         );
         $rooms = array_map(static fn(array $row): int => (int) ($row['rooms_id'] ?? 0), $matches);
         sort($rooms);
+        $expected_rooms = [$public_room_id, $internal_room_id];
+        sort($expected_rooms);
         task3Assert(
-            $rooms === [$public_room_id, $internal_room_id],
+            $rooms === $expected_rooms,
             sprintf('Evento %s deve existir nos canais publico e interno', $event_type)
         );
     }

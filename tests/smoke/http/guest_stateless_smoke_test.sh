@@ -187,9 +187,9 @@ if (\$current_followup <= 0 || !glpichat_is_valid_external_followup_user_id(\$cu
 \$now        = date('Y-m-d H:i:s');
 \$expires_at = date('Y-m-d H:i:s', time() + 3600);
 \$DB->insert('glpi_plugin_glpichat_invites', [
-    'tickets_id'=>\$tickets_id,'token_hash'=>hash('sha256',\$token),
+    'rooms_id'=>\$rooms_id,'tickets_id'=>\$tickets_id,'token_hash'=>hash('sha256',\$token),
     'guest_name'=>'Smoke Stateless','guest_email'=>'','created_by'=>0,
-    'accepted_at'=>null,'revoked_at'=>null,'expires_at'=>\$expires_at,'created_at'=>\$now,
+    'accepted_at'=>null,'revoked_at'=>null,'expires_at'=>\$expires_at,'date_creation'=>\$now,
 ]);
 \$invite_id = (int)\$DB->insertId();
 if (\$invite_id <= 0) { fwrite(STDERR, "[FAIL] insert invite\n"); exit(1); }
@@ -262,6 +262,9 @@ send_status="$(curl -sS -o "$send_ok_json" -w "%{http_code}" \
     "${base_url}/plugins/glpichat/Guest/Send")"
 assert_http_status "$send_status" "200" "POST /Guest/Send com cookie valido retorna 200"
 assert_json_field_int "$send_ok_json" "message_id" "POST /Guest/Send retornou message_id inteiro"
+
+# A rota de upload compartilha o throttle do fluxo guest; aguardamos fora da janela padrão.
+sleep 3
 
 # ---------------------------------------------------------------------------
 # FASE 3 — POST /Guest/Upload com cookie valido → 200 + JSON com documents_id int

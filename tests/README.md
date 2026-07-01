@@ -38,6 +38,11 @@ tests/
 │       └── invite_flow_test.php # Criação administrativa de invite
 │       └── message_flow_test.php # Orquestração pura de envio e upload
 │       └── readstate_test.php  # Regras puras de unread/readstate
+├── performance/
+│   ├── README.md
+│   ├── k6/
+│   │   └── chat_polling.js     # Suite k6 para polling e sync
+│   └── run_k6.sh               # Runner local para carga/performance
 └── run_unit_php.sh             # Roteador principal das suítes de teste
 ```
 
@@ -141,6 +146,12 @@ Exemplos de execução direta no container:
 
 ```bash
 ./tests/run_unit_php.sh e2e http://localhost:8080
+```
+
+### Carga / Performance
+
+```bash
+./tests/performance/run_k6.sh http://localhost:8080
 ```
 
 ## Diretrizes

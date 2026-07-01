@@ -598,6 +598,7 @@ import {
     const tab = ui.root.querySelector("[data-role='launcher-tab']");
     let isDragging = false;
     let hasMoved = false;
+    let suppressNextClick = false;
     let startX = 0, startY = 0;
     let initialRect = null;
     let dragTimeout = null;
@@ -635,11 +636,16 @@ import {
       window.removeEventListener("touchend", onEnd);
 
       if (!hasMoved) {
-        // It was a click
-        toggleLauncher();
+        // It was a click - let the native "click" listener handle the toggle
+        // so keyboard/synthetic activation (Enter, .click(), assistive tech)
+        // keeps working the same way as a real pointer click.
         return;
       }
-      
+
+      // A real drag happened: suppress the trailing native "click" event
+      // the browser fires after mouseup, so it doesn't also toggle the launcher.
+      suppressNextClick = true;
+
       // Calculate closest corner (FLIP animation)
       const currentRect = ui.root.getBoundingClientRect();
       const centerX = currentRect.left + currentRect.width / 2;
@@ -743,8 +749,19 @@ import {
     // Prevent default browser drag on the tab and its images
     tab.addEventListener("dragstart", (e) => e.preventDefault());
 
-    // Remove the old toggle click listener from createShell
-    tab.removeEventListener("click", toggleLauncher);
+    // Single source of truth for opening/closing the launcher: the native
+    // "click" event covers real pointer clicks (mousedown+mouseup without
+    // movement still fires a trailing click), keyboard activation (Enter/
+    // Space on the button) and synthetic/programmatic .click() calls alike.
+    // Real drags set suppressNextClick so the trailing click doesn't also
+    // toggle the launcher.
+    tab.addEventListener("click", () => {
+      if (suppressNextClick) {
+        suppressNextClick = false;
+        return;
+      }
+      toggleLauncher();
+    });
   };
 
   const minimizeLauncher = () => {
@@ -1625,13 +1642,26 @@ import {
       processing: Array.from(state.tickets.values()).filter((ticket) => statusKeyFromCode(ticket.status) === "processing"),
       pending: Array.from(state.tickets.values()).filter((ticket) => statusKeyFromCode(ticket.status) === "pending"),
     };
-    if (allTicketsByStatus[state.statusFilter].length === 0) {
-      if (allTicketsByStatus.processing.length > 0) {
+    const hasUnread = (tickets) => tickets.some((ticket) => ticket.unreadTotal > 0);
+    // Prefer a status bucket that actually has unread tickets: a stale ticket
+    // sitting in the current filter (e.g. an old "new" ticket with no unread
+    // messages) must not hide a different bucket (e.g. "processing") that just
+    // received new messages and is the reason the launcher is being opened.
+    if (!hasUnread(allTicketsByStatus[state.statusFilter])) {
+      if (hasUnread(allTicketsByStatus.processing)) {
         state.statusFilter = "processing";
-      } else if (allTicketsByStatus.new.length > 0) {
+      } else if (hasUnread(allTicketsByStatus.new)) {
         state.statusFilter = "new";
-      } else if (allTicketsByStatus.pending.length > 0) {
+      } else if (hasUnread(allTicketsByStatus.pending)) {
         state.statusFilter = "pending";
+      } else if (allTicketsByStatus[state.statusFilter].length === 0) {
+        if (allTicketsByStatus.processing.length > 0) {
+          state.statusFilter = "processing";
+        } else if (allTicketsByStatus.new.length > 0) {
+          state.statusFilter = "new";
+        } else if (allTicketsByStatus.pending.length > 0) {
+          state.statusFilter = "pending";
+        }
       }
     }
 

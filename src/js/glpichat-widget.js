@@ -792,7 +792,7 @@ import {
       ui.launcher.classList.remove("is-closing");
     }
     saveUiState(state);
-    renderLauncherNotifications();
+    renderLauncherNotifications(true);
     if (state.activeTicketId > 0) {
       refreshInvites(state.activeTicketId).catch(console.error);
     }
@@ -1611,7 +1611,11 @@ import {
   };
 
   let lastLauncherNotificationsSignature = '';
-  const renderLauncherNotifications = () => {
+  // autoSelect: só a abertura do launcher (openLauncher) deve poder pular
+  // automaticamente para o bucket de status com atividade nao lida. Uma vez
+  // aberto, cliques manuais no filtro e atualizacoes de polling em segundo
+  // plano NUNCA devem sobrescrever a escolha do usuario.
+  const renderLauncherNotifications = (autoSelect = false) => {
     if (!state.launcherOpen) {
       lastLauncherNotificationsSignature = '';
       return;
@@ -1624,11 +1628,43 @@ import {
         state.channels.get(t.channels?.internal)?.unread_count ?? 0,
       ])
     );
-    if (sig === lastLauncherNotificationsSignature) {
+    if (!autoSelect && sig === lastLauncherNotificationsSignature) {
       return;
     }
     lastLauncherNotificationsSignature = sig;
 
+    const allTicketsByStatus = {
+      new: Array.from(state.tickets.values()).filter((ticket) => statusKeyFromCode(ticket.status) === "new"),
+      processing: Array.from(state.tickets.values()).filter((ticket) => statusKeyFromCode(ticket.status) === "processing"),
+      pending: Array.from(state.tickets.values()).filter((ticket) => statusKeyFromCode(ticket.status) === "pending"),
+    };
+    if (autoSelect) {
+      const hasUnread = (tickets) => tickets.some((ticket) => ticket.unreadTotal > 0);
+      // Prefer a status bucket that actually has unread tickets: a stale ticket
+      // sitting in the current filter (e.g. an old "new" ticket with no unread
+      // messages) must not hide a different bucket (e.g. "processing") that just
+      // received new messages and is the reason the launcher is being opened.
+      if (!hasUnread(allTicketsByStatus[state.statusFilter])) {
+        if (hasUnread(allTicketsByStatus.processing)) {
+          state.statusFilter = "processing";
+        } else if (hasUnread(allTicketsByStatus.new)) {
+          state.statusFilter = "new";
+        } else if (hasUnread(allTicketsByStatus.pending)) {
+          state.statusFilter = "pending";
+        } else if (allTicketsByStatus[state.statusFilter].length === 0) {
+          if (allTicketsByStatus.processing.length > 0) {
+            state.statusFilter = "processing";
+          } else if (allTicketsByStatus.new.length > 0) {
+            state.statusFilter = "new";
+          } else if (allTicketsByStatus.pending.length > 0) {
+            state.statusFilter = "pending";
+          }
+        }
+      }
+    }
+
+    // Montado DEPOIS da auto-selecao acima, para que o botao "ativo"
+    // sempre corresponda ao filtro realmente usado na lista abaixo.
     const statusFilters = `
       <div class="glpichat-status-filters">
         <button type="button" class="glpichat-status-filter ${state.statusFilter === "new" ? "is-active" : ""}" data-filter="new">Novo</button>
@@ -1636,34 +1672,6 @@ import {
         <button type="button" class="glpichat-status-filter ${state.statusFilter === "pending" ? "is-active" : ""}" data-filter="pending">Pendente</button>
       </div>
     `;
-
-    const allTicketsByStatus = {
-      new: Array.from(state.tickets.values()).filter((ticket) => statusKeyFromCode(ticket.status) === "new"),
-      processing: Array.from(state.tickets.values()).filter((ticket) => statusKeyFromCode(ticket.status) === "processing"),
-      pending: Array.from(state.tickets.values()).filter((ticket) => statusKeyFromCode(ticket.status) === "pending"),
-    };
-    const hasUnread = (tickets) => tickets.some((ticket) => ticket.unreadTotal > 0);
-    // Prefer a status bucket that actually has unread tickets: a stale ticket
-    // sitting in the current filter (e.g. an old "new" ticket with no unread
-    // messages) must not hide a different bucket (e.g. "processing") that just
-    // received new messages and is the reason the launcher is being opened.
-    if (!hasUnread(allTicketsByStatus[state.statusFilter])) {
-      if (hasUnread(allTicketsByStatus.processing)) {
-        state.statusFilter = "processing";
-      } else if (hasUnread(allTicketsByStatus.new)) {
-        state.statusFilter = "new";
-      } else if (hasUnread(allTicketsByStatus.pending)) {
-        state.statusFilter = "pending";
-      } else if (allTicketsByStatus[state.statusFilter].length === 0) {
-        if (allTicketsByStatus.processing.length > 0) {
-          state.statusFilter = "processing";
-        } else if (allTicketsByStatus.new.length > 0) {
-          state.statusFilter = "new";
-        } else if (allTicketsByStatus.pending.length > 0) {
-          state.statusFilter = "pending";
-        }
-      }
-    }
 
     const filteredTickets = Array.from(state.tickets.values())
       .filter((ticket) => statusKeyFromCode(ticket.status) === state.statusFilter)

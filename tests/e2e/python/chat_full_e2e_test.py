@@ -282,7 +282,7 @@ def main() -> None:
             )
 
             tech_textarea, tech_send, tech_file = open_ticket_widget(tech, TICKET_ID, "tecnico")
-            req_textarea = req_send = req_file = None
+            req_textarea, req_send, req_file = open_ticket_widget(requester, TICKET_ID, "solicitante")
 
             # 2. Mensageria bidirecional no canal publico.
             msg_from_tech = f"e2e-tech-{int(time.time())}"
@@ -817,32 +817,28 @@ def main() -> None:
             log_pass("Historico carregado para ambos os participantes (presenca verificada)")
 
             # 8. Indicador de digitando.
-            if req_textarea is None:
-                log_info("Widget do solicitante nao foi aberto neste ambiente; pulando validacao de digitando")
-            else:
-                req_textarea.click()
-                req_textarea.type("digitando sem enviar...", delay=30)
-                typing_indicator = tech.locator(".glpichat-widget [data-role='typing-indicator']").first
-                deadline = time.time() + (typing_wait_ms / 1000.0)
-                typing_seen = False
-                while time.time() < deadline:
-                    visible = tech.evaluate(
-                        """() => {
-                            const el = document.querySelector(".glpichat-widget [data-role='typing-indicator']");
-                            if (!el) return false;
-                            const txt = (el.textContent || '').trim();
-                            return !el.hidden && txt.length > 0;
-                        }"""
-                    )
-                    if visible:
-                        typing_seen = True
-                        break
-                    # Mantem o "digitando" vivo enquanto aguardamos o poll do tecnico.
-                    req_textarea.type(".", delay=20)
-                    tech.wait_for_timeout(500)
-                if not typing_seen:
-                    fail("Indicador de digitando nao ficou visivel para o tecnico na janela derivada da config")
-                log_pass("Indicador de digitando visivel no tecnico enquanto o solicitante digita")
+            req_textarea.click()
+            req_textarea.type("digitando sem enviar...", delay=30)
+            deadline = time.time() + (typing_wait_ms / 1000.0)
+            typing_seen = False
+            while time.time() < deadline:
+                visible = tech.evaluate(
+                    """() => {
+                        const el = document.querySelector(".glpichat-widget [data-role='typing-indicator']");
+                        if (!el) return false;
+                        const txt = (el.textContent || '').trim();
+                        return !el.hidden && txt.length > 0;
+                    }"""
+                )
+                if visible:
+                    typing_seen = True
+                    break
+                # Mantem o "digitando" vivo enquanto aguardamos o poll do tecnico.
+                req_textarea.type(".", delay=20)
+                tech.wait_for_timeout(500)
+            if not typing_seen:
+                fail("Indicador de digitando nao ficou visivel para o tecnico na janela derivada da config")
+            log_pass("Indicador de digitando visivel no tecnico enquanto o solicitante digita")
 
             # 9. Notificacao deterministica via badge de nao lidas.
             # O toast continua efemero, entao o sinal estavel de aceite e o

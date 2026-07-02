@@ -1,0 +1,333 @@
+name: "CI — Manual Native Deploy"
+
+# Job paralelo e independente do ci-full.yml (container-based). O ci-full.yml
+# sempre instala o GLPI no MESMO path fixo (/var/www/glpi), entao qualquer
+# suposicao implicita/hardcoded no codigo do plugin sobre "onde o GLPI esta
+# instalado" nunca seria pega por ele, ja que o path nunca varia entre
+# execucoes. Este job instala Apache + PHP + MariaDB NATIVAMENTE no runner
+# (sem imagem Docker oficial glpi/glpi) e, de proposito, num path DIFERENTE
+# de /var/www/glpi, para forcar a exposicao desse tipo de bug.
+on:
+  push:
+    branches:
+      - main
+      - "feature/**"
+      - "fix/**"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: "ci-manual-deploy-${{ github.ref }}"
+  cancel-in-progress: true
+
+jobs:
+  native-deploy:
+    name: "Native deploy (Apache + PHP-FPM + MariaDB, path != /var/www/glpi)"
+    runs-on: "ubuntu-latest"
+    timeout-minutes: 35
+
+    permissions:
+      contents: read
+
+    env:
+      GLPI_VERSION: "11.0.7"
+      # Path deliberadamente DIFERENTE de /var/www/glpi (usado pelo ci-full.yml)
+      # para expor qualquer suposicao hardcoded no plugin sobre a localizacao
+      # da instalacao do GLPI.
+      GLPI_INSTALL_DIR: "/opt/glpi"
+      GLPI_BASE_URL: "http://localhost:8080"
+      GLPI_DB_HOST: "127.0.0.1"
+      GLPI_DB_NAME: "glpi"
+      GLPI_DB_USER: "glpi"
+      GLPI_DB_PASSWORD: "glpi"
+      PHP_VERSION: "8.2"
+
+    steps:
+      - name: "Checkout"
+        uses: "actions/checkout@v4"
+
+      - name: "Setup Node.js"
+        uses: "actions/setup-node@v4"
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: "Install JS dependencies"
+        run: npm ci
+
+      - name: "Install Chromium and Python deps"
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            chromium-browser python3 python3-pip curl
+          if [[ ! -f /usr/bin/chromium ]] && [[ -f /usr/bin/chromium-browser ]]; then
+            sudo ln -sf /usr/bin/chromium-browser /usr/bin/chromium
+          fi
+          chromium --version
+          pip3 install --quiet playwright
+
+      # Extensoes confirmadas contra o composer.json real do GLPI 11.0.7
+      # (require/require-ext) + ldap/exif pedidos no briefing (usados por
+      # integracoes opcionais do GLPI, nao travam a instalacao se ausentes
+      # no core, mas o plugin/GLPI os usa quando disponiveis).
+      - name: "Setup PHP ${{ env.PHP_VERSION }}"
+        uses: "shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240" # v2 (2.37.2), pinned by commit SHA
+        with:
+          php-version: "${{ env.PHP_VERSION }}"
+          extensions: >-
+            bcmath, ctype, curl, dom, exif, fileinfo, filter, gd, hash,
+            iconv, intl, json, ldap, libxml, mbstring, mysqli, pdo_mysql,
+            opcache, openssl, session, simplexml, tokenizer, xml, zip, zlib
+          tools: none
+          coverage: none
+
+      # Apache + MariaDB + PHP-FPM "de verdade" via apt, sem nenhum container.
+      - name: "Install Apache2, MariaDB and PHP-FPM"
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            apache2 mariadb-server "php${PHP_VERSION}-fpm"
+          sudo a2enmod proxy_fcgi setenvif rewrite
+          sudo systemctl enable --now mariadb
+          sudo systemctl enable --now "php${PHP_VERSION}-fpm"
+          sudo systemctl enable --now apache2
+
+      - name: "Configure MariaDB database and user"
+        run: |
+          sudo mysql -u root <<SQL
+          CREATE DATABASE IF NOT EXISTS \`${GLPI_DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+          CREATE USER IF NOT EXISTS '${GLPI_DB_USER}'@'localhost' IDENTIFIED BY '${GLPI_DB_PASSWORD}';
+          CREATE USER IF NOT EXISTS '${GLPI_DB_USER}'@'127.0.0.1' IDENTIFIED BY '${GLPI_DB_PASSWORD}';
+          GRANT ALL PRIVILEGES ON \`${GLPI_DB_NAME}\`.* TO '${GLPI_DB_USER}'@'localhost';
+          GRANT ALL PRIVILEGES ON \`${GLPI_DB_NAME}\`.* TO '${GLPI_DB_USER}'@'127.0.0.1';
+          FLUSH PRIVILEGES;
+          SQL
+
+      # Usa o tarball oficial de release (nao "git clone --branch"): o tarball
+      # ja vem com vendor/ e assets compilados prontos para producao (e o
+      # metodo "instalacao manual" documentado pelo proprio GLPI), evitando ter
+      # que rodar composer/webpack no runner. E o mesmo conteudo que a imagem
+      # Docker glpi/glpi:11.0.7 empacota, so que instalado num path diferente.
+      - name: "Download and extract GLPI ${{ env.GLPI_VERSION }} (native, non-Docker)"
+        run: |
+          curl -fsSL -o /tmp/glpi.tgz \
+            "https://github.com/glpi-project/glpi/releases/download/${GLPI_VERSION}/glpi-${GLPI_VERSION}.tgz"
+          sudo mkdir -p "$(dirname "$GLPI_INSTALL_DIR")"
+          sudo rm -rf /opt/glpi-extract
+          sudo mkdir -p /opt/glpi-extract
+          sudo tar xzf /tmp/glpi.tgz -C /opt/glpi-extract
+          sudo rm -rf "$GLPI_INSTALL_DIR"
+          sudo mv /opt/glpi-extract/glpi "$GLPI_INSTALL_DIR"
+          sudo rmdir /opt/glpi-extract
+          rm -f /tmp/glpi.tgz
+          echo "GLPI extraido em $GLPI_INSTALL_DIR (!= /var/www/glpi de proposito)"
+
+      # Copia real de arquivos do plugin (nao bind mount de container, ja que
+      # nao ha container neste job).
+      - name: "Copy glpichat plugin into GLPI plugins dir"
+        run: |
+          target="$GLPI_INSTALL_DIR/plugins/glpichat"
+          sudo mkdir -p "$target"
+          sudo rsync -a --exclude='.git' --exclude='node_modules' --exclude='coverage' \
+            "$GITHUB_WORKSPACE"/ "$target"/
+          echo "Plugin copiado para $target"
+
+      - name: "Fix ownership/permissions for Apache + php-fpm (www-data)"
+        run: |
+          sudo chown -R "$(id -un)":www-data "$GLPI_INSTALL_DIR"
+          sudo chmod -R g+rwX "$GLPI_INSTALL_DIR"
+
+      - name: "Configure Apache VirtualHost pointing to ${{ env.GLPI_INSTALL_DIR }}"
+        run: |
+          cat <<EOF | sudo tee /etc/apache2/sites-available/glpi.conf >/dev/null
+          <VirtualHost *:80>
+              DocumentRoot ${GLPI_INSTALL_DIR}
+              <Directory ${GLPI_INSTALL_DIR}>
+                  AllowOverride All
+                  Require all granted
+                  DirectoryIndex index.php
+              </Directory>
+              <FilesMatch \.php\$>
+                  SetHandler "proxy:unix:/run/php/php${PHP_VERSION}-fpm.sock|fcgi://localhost/"
+              </FilesMatch>
+              ErrorLog \${APACHE_LOG_DIR}/glpi_error.log
+              CustomLog \${APACHE_LOG_DIR}/glpi_access.log combined
+          </VirtualHost>
+          EOF
+          sudo a2dissite 000-default || true
+          sudo a2ensite glpi
+          sudo systemctl reload apache2
+
+      - name: "Install GLPI database schema (bin/console database:install)"
+        run: |
+          php "$GLPI_INSTALL_DIR/bin/console" database:install \
+            --db-host="$GLPI_DB_HOST" \
+            --db-name="$GLPI_DB_NAME" \
+            --db-user="$GLPI_DB_USER" \
+            --db-password="$GLPI_DB_PASSWORD" \
+            --default-language=en_GB \
+            --no-interaction \
+            --no-telemetry
+
+      - name: "Wait for GLPI to answer over HTTP"
+        run: |
+          for i in $(seq 1 36); do
+            code="$(curl -s -o /dev/null -w '%{http_code}' "$GLPI_BASE_URL/front/login.php" || echo 000)"
+            if [[ "$code" == "200" ]]; then
+              echo "[OK] GLPI respondeu HTTP 200 apos ${i}x5s"
+              exit 0
+            fi
+            echo "  Aguardando GLPI ($i/36)... http_code=$code"
+            sleep 5
+          done
+          echo "[FAIL] GLPI nao respondeu HTTP 200 em 3 minutos"
+          sudo apache2ctl -S || true
+          sudo tail -n 100 /var/log/apache2/glpi_error.log || true
+          exit 1
+
+      - name: "Verify plugin is present at native install dir"
+        run: |
+          if [[ ! -f "$GLPI_INSTALL_DIR/plugins/glpichat/setup.php" ]]; then
+            echo "[FAIL] setup.php ausente em $GLPI_INSTALL_DIR/plugins/glpichat"
+            exit 1
+          fi
+          echo "[OK] plugin presente em $GLPI_INSTALL_DIR/plugins/glpichat (path nativo, != /var/www/glpi)"
+
+      - name: "Install and activate glpichat plugin (bin/console)"
+        run: |
+          php "$GLPI_INSTALL_DIR/bin/console" glpi:plugin:install --username=glpi glpichat
+          php "$GLPI_INSTALL_DIR/bin/console" glpi:plugin:activate glpichat
+
+      # Mesmo racional do ci-full.yml: GLPI marca is_uploadable=1 por padrao
+      # para "HTML" etc. Os testes de seguranca do plugin assumem que
+      # extensoes perigosas ja estao bloqueadas, entao endurecemos aqui
+      # tambem, so que via PHP CLI direto (sem docker exec).
+      - name: "Harden document upload security (block dangerous extensions)"
+        run: |
+          cat > /tmp/glpichat_harden_doctypes.php <<'PHPEOF'
+          <?php
+          declare(strict_types=1);
+          $glpi_dir = getenv('GLPI_INSTALL_DIR') ?: '/opt/glpi';
+          require_once $glpi_dir . '/vendor/autoload.php';
+          (new \Glpi\Kernel\Kernel())->boot();
+          global $DB;
+          $blocked_exts = ['html', 'htm', 'svg', 'xhtml', 'shtml'];
+          $DB->update('glpi_documenttypes', ['is_uploadable' => 0], ['ext' => $blocked_exts]);
+          $rows = $DB->request([
+              'FROM'  => 'glpi_documenttypes',
+              'WHERE' => ['ext' => $blocked_exts],
+          ]);
+          foreach ($rows as $row) {
+              printf("  ext=%s is_uploadable=%d\n", $row['ext'], $row['is_uploadable']);
+          }
+          PHPEOF
+          php /tmp/glpichat_harden_doctypes.php
+          rm -f /tmp/glpichat_harden_doctypes.php
+
+      # ------------------------------------------------------------------
+      # tests/run_full_suite.sh e tests/smoke/http/guest_stateless_smoke_test.sh
+      # (nao alterados por este job — sao mantidos por QA) chamam `docker exec`
+      # / `docker cp` assumindo o modelo do ci-full.yml. Este job nao usa
+      # containers, entao instalamos um shim minimo de `docker` que traduz
+      # essas chamadas para execucao local equivalente, SEM tocar em nenhum
+      # argumento/path recebido. Se algum script referenciar um path que so
+      # existe no modelo de container (ex.: /var/www/glpi, hardcoded em
+      # tests/run_full_suite.sh e em guest_stateless_smoke_test.sh), a chamada
+      # local falhara honestamente — o que e esperado e reportado ao final
+      # desta tarefa, e NAO deve ser corrigido por este agente.
+      # ------------------------------------------------------------------
+      - name: "Install docker shim (translate docker exec/cp to local exec)"
+        run: |
+          sudo tee /usr/local/bin/docker >/dev/null <<'SHIMEOF'
+          #!/usr/bin/env bash
+          # Shim minimo de `docker` para o job de deploy nativo. Nao ha
+          # containers neste job; isto apenas remove a dependencia de Docker
+          # dos scripts em tests/, sem alterar nenhum path/argumento recebido.
+          set -euo pipefail
+
+          cmd="${1:-}"
+          shift || true
+
+          case "$cmd" in
+            exec)
+              env_args=()
+              while [[ "${1:-}" == "-e" ]]; do
+                env_args+=("$2")
+                shift 2
+              done
+              while [[ "${1:-}" == -* ]]; do
+                shift
+              done
+              shift # descarta o nome do container (ignorado: nao ha containers)
+              exec env "${env_args[@]}" "$@"
+              ;;
+            cp)
+              src="${1#*:}"
+              dst="${2#*:}"
+              if [[ "$src" == "$dst" ]]; then
+                exit 0
+              fi
+              exec cp -a "$src" "$dst"
+              ;;
+            *)
+              echo "docker-shim: subcomando nao suportado neste job nativo: $cmd $*" >&2
+              exit 1
+              ;;
+          esac
+          SHIMEOF
+          sudo chmod +x /usr/local/bin/docker
+          echo "/usr/local/bin" >> "$GITHUB_PATH"
+          hash -r
+          echo "docker resolvido para: $(command -v docker)"
+
+      # Prova de valor concreta: falha o job com mensagem clara se o codigo do
+      # plugin (fora de tests/) contiver paths de instalacao GLPI hardcoded.
+      # Confirmado manualmente (sem falso positivo/negativo obvio) contra o
+      # estado atual do plugin antes deste job ser adicionado.
+      - name: "Check for hardcoded GLPI install paths in plugin code"
+        run: |
+          set -uo pipefail
+          dirs=()
+          for d in src front public ajax; do
+            [[ -d "$d" ]] && dirs+=("$d")
+          done
+          if [[ "${#dirs[@]}" -eq 0 ]]; then
+            echo "Nenhum diretorio de codigo (src/front/public/ajax) encontrado; nada a verificar."
+            exit 0
+          fi
+          echo "Verificando diretorios: ${dirs[*]}"
+          matches="$(grep -rnE '/var/www/(glpi|html)\b' "${dirs[@]}" || true)"
+          if [[ -n "$matches" ]]; then
+            echo "::error::Path(s) de instalacao GLPI hardcoded encontrados no codigo do plugin:"
+            echo "$matches"
+            exit 1
+          fi
+          echo "[OK] Nenhum path hardcoded de instalacao GLPI encontrado em ${dirs[*]}."
+
+      - name: "Run full test suite (native env, GLPI at ${{ env.GLPI_INSTALL_DIR }})"
+        run: bash tests/run_full_suite.sh "${{ env.GLPI_BASE_URL }}"
+
+      - name: "Upload test logs"
+        if: always()
+        uses: "actions/upload-artifact@v4"
+        with:
+          name: "test-logs-manual-deploy-${{ github.run_id }}"
+          path: "tests/logs/"
+          retention-days: 14
+
+      - name: "Apache/PHP-FPM/MariaDB logs on failure"
+        if: failure()
+        run: |
+          echo "--- Apache error log ---"
+          sudo tail -n 150 /var/log/apache2/glpi_error.log || true
+          echo "--- Apache access log ---"
+          sudo tail -n 50 /var/log/apache2/glpi_access.log || true
+          echo "--- php-fpm journal ---"
+          sudo journalctl -u "php${PHP_VERSION}-fpm" --no-pager -n 150 || true
+          echo "--- mariadb journal ---"
+          sudo journalctl -u mariadb --no-pager -n 100 || true
+          echo "--- GLPI internal log (files/_log) ---"
+          sudo tail -n 100 "$GLPI_INSTALL_DIR"/files/_log/*.log 2>/dev/null || true

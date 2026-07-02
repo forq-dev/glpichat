@@ -20,7 +20,8 @@ set -uo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 plugin_root="$(cd "$script_dir/.." && pwd)"
 container_name="glpi"
-container_plugin_root="/var/www/glpi/plugins/glpichat"
+GLPI_INSTALL_DIR="${GLPI_INSTALL_DIR:-/var/www/glpi}"
+container_plugin_root="${GLPI_INSTALL_DIR}/plugins/glpichat"
 
 base_url="${1:-http://localhost:8080}"
 

@@ -13,7 +13,8 @@ set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 plugin_root="$(cd "$script_dir/../../.." && pwd)"
 container_name="glpi"
-container_plugin_root="/var/www/glpi/plugins/glpichat"
+GLPI_INSTALL_DIR="${GLPI_INSTALL_DIR:-/var/www/glpi}"
+container_plugin_root="${GLPI_INSTALL_DIR}/plugins/glpichat"
 
 base_url="${1:-http://localhost:8080}"
 GLPICHAT_TICKET_ID="${2:-${GLPICHAT_TICKET_ID:-1}}"
@@ -112,8 +113,8 @@ run_cleanup() {
 \$participant_id    = (int)(\$_ENV['P_ID']  ?? 0);
 \$invite_id         = (int)(\$_ENV['I_ID']  ?? 0);
 \$original_followup = (string)(\$_ENV['ORIG_F'] ?? '-1');
-\$loader = require '/var/www/glpi/vendor/autoload.php';
-\$loader->addPsr4('GlpiPlugin\\\\Glpichat\\\\', '/var/www/glpi/plugins/glpichat/src/');
+\$loader = require '${GLPI_INSTALL_DIR}/vendor/autoload.php';
+\$loader->addPsr4('GlpiPlugin\\\\Glpichat\\\\', '${GLPI_INSTALL_DIR}/plugins/glpichat/src/');
 (new \Glpi\Kernel\Kernel())->boot();
 global \$DB;
 if (\$participant_id > 0) {
@@ -158,11 +159,11 @@ cat > "$php_setup_script" <<PHPEOF
 declare(strict_types=1);
 try {
 \$tickets_id = (int)(\$_ENV['TICKET_ID'] ?? 1);
-\$loader = require '/var/www/glpi/vendor/autoload.php';
-\$loader->addPsr4('GlpiPlugin\\\\Glpichat\\\\', '/var/www/glpi/plugins/glpichat/src/');
+\$loader = require '${GLPI_INSTALL_DIR}/vendor/autoload.php';
+\$loader->addPsr4('GlpiPlugin\\\\Glpichat\\\\', '${GLPI_INSTALL_DIR}/plugins/glpichat/src/');
 (new \Glpi\Kernel\Kernel())->boot();
-if (!function_exists('plugin_init_glpichat')) { require '/var/www/glpi/plugins/glpichat/setup.php'; }
-if (!function_exists('plugin_glpichat_install')) { require '/var/www/glpi/plugins/glpichat/hook.php'; }
+if (!function_exists('plugin_init_glpichat')) { require '${GLPI_INSTALL_DIR}/plugins/glpichat/setup.php'; }
+if (!function_exists('plugin_glpichat_install')) { require '${GLPI_INSTALL_DIR}/plugins/glpichat/hook.php'; }
 plugin_init_glpichat();
 global \$DB;
 

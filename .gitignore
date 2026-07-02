@@ -33,3 +33,7 @@ tests/performance/logs/*
 /_*.log
 /_*.txt
 /ci-errors/
+.gitignore
+.playwright-mcp/
+.agents-sync.json
+.mcp.json

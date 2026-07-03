@@ -38,7 +38,10 @@ jobs:
       # para expor qualquer suposicao hardcoded no plugin sobre a localizacao
       # da instalacao do GLPI.
       GLPI_INSTALL_DIR: "/opt/glpi"
-      GLPI_BASE_URL: "http://localhost:8080"
+      # Porta 80: o Apache deste job (nativo) escuta na porta padrao do
+      # VirtualHost (:80). O 8080 usado no ci-full.yml so existe la porque o
+      # container mapeia 8080->80; aqui nao ha esse mapeamento.
+      GLPI_BASE_URL: "http://localhost"
       GLPI_DB_HOST: "127.0.0.1"
       GLPI_DB_NAME: "glpi"
       GLPI_DB_USER: "glpi"

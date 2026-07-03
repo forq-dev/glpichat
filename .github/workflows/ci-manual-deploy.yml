@@ -152,15 +152,24 @@ jobs:
           sudo chown -R "$(id -un)":www-data "$GLPI_INSTALL_DIR"
           sudo chmod -R g+rwX "$GLPI_INSTALL_DIR"
 
-      - name: "Configure Apache VirtualHost pointing to ${{ env.GLPI_INSTALL_DIR }}"
+      # GLPI 11 exige que TODAS as requisicoes passem pelo front controller
+      # em public/index.php (o Kernel resolve internamente rotas legadas como
+      # /front/login.php). Nao ha .htaccess no tarball oficial - o proprio
+      # front/*.php aborta com 404 se a classe Kernel nao estiver carregada
+      # (ver front/_check_webserver_config.php), entao o DocumentRoot precisa
+      # ser public/ com rewrite para index.php, e nao a raiz do GLPI.
+      - name: "Configure Apache VirtualHost pointing to ${{ env.GLPI_INSTALL_DIR }}/public"
         run: |
           cat <<EOF | sudo tee /etc/apache2/sites-available/glpi.conf >/dev/null
           <VirtualHost *:80>
-              DocumentRoot ${GLPI_INSTALL_DIR}
-              <Directory ${GLPI_INSTALL_DIR}>
+              DocumentRoot ${GLPI_INSTALL_DIR}/public
+              <Directory ${GLPI_INSTALL_DIR}/public>
                   AllowOverride All
                   Require all granted
                   DirectoryIndex index.php
+                  RewriteEngine On
+                  RewriteCond %{REQUEST_FILENAME} !-f
+                  RewriteRule ^(.*)\$ index.php [QSA,L]
               </Directory>
               <FilesMatch \.php\$>
                   SetHandler "proxy:unix:/run/php/php${PHP_VERSION}-fpm.sock|fcgi://localhost/"

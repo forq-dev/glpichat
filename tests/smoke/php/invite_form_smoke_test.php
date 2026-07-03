@@ -40,12 +40,21 @@ plugin_glpichat_install();
 plugin_init_glpichat();
 
 /**
+ * IMPORTANTE: lanca excecao em vez de exit() para que o bloco `finally` do
+ * script (restauracao de config + limpeza de linhas criadas) SEMPRE seja
+ * executado, mesmo quando uma asserção falha. `exit()` termina o processo
+ * imediatamente e pula qualquer `finally` pendente, o que deixava configs
+ * (ex.: max_invites_per_ticket) e convites orfãos no banco sempre que uma
+ * asserção falhava aqui - contaminando os demais smokes/E2E que rodam na
+ * mesma esteira/ticket (causa raiz de falhas em cascata, incluindo o erro
+ * "Limite máximo de convites ativos por chamado atingido." visto em outros
+ * testes).
+ *
  * @return never
  */
 function invFail(string $message): void
 {
-    fwrite(STDERR, "[FAIL] {$message}\n");
-    exit(1);
+    throw new RuntimeException("[FAIL] {$message}");
 }
 
 function invPass(string $message): void
@@ -211,6 +220,7 @@ foreach ($config_keys as $key) {
     $config_snapshot[$key] = (string) Config::getConfigurationValue('plugin:glpichat', $key);
 }
 
+try {
 try {
     $invite_ctrl = new InviteController();
     $manage_ctrl = new InviteManageController();
@@ -513,4 +523,10 @@ try {
     unset($_SESSION['valid_id'], $_SESSION['glpiname'], $_SESSION['glpiID'], $_SESSION['glpi_currenttime']);
     unset($_SESSION['glpiactiveprofile'], $_SESSION['glpiactive_entity'], $_SESSION['glpigroups']);
     unset($_SESSION['glpicsrftokens']);
+}
+} catch (\Throwable $e) {
+    // O finally acima ja restaurou config e limpou o banco antes de chegarmos
+    // aqui - agora reportamos a falha e encerramos com codigo de erro.
+    fwrite(STDERR, $e->getMessage() . "\n");
+    exit(1);
 }

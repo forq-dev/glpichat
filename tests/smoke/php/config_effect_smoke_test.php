@@ -29,12 +29,19 @@ plugin_glpichat_install();
 plugin_init_glpichat();
 
 /**
+ * IMPORTANTE: lanca excecao em vez de exit() para que o bloco `finally` do
+ * script (restauracao de config + limpeza de linhas criadas) SEMPRE seja
+ * executado, mesmo quando uma asserção falha. `exit()` termina o processo
+ * imediatamente e pula qualquer `finally` pendente, o que deixava configs
+ * (ex.: max_invites_per_ticket, guest_send_throttle_s) e linhas orfãs no
+ * banco sempre que uma asserção falhava aqui - contaminando os demais smokes
+ * que rodam na mesma esteira/ticket (causa raiz de falhas em cascata).
+ *
  * @return never
  */
 function cfgFail(string $message): void
 {
-    fwrite(STDERR, "[FAIL] {$message}\n");
-    exit(1);
+    throw new RuntimeException("[FAIL] {$message}");
 }
 
 function cfgPass(string $message): void
@@ -179,6 +186,7 @@ foreach ($config_keys as $key) {
     $config_snapshot[$key] = cfgGet($key);
 }
 
+try {
 try {
     // -----------------------------------------------------------------
     // invite_ttl_seconds -> expires_at do convite ~= now + ttl
@@ -471,4 +479,10 @@ try {
 
     unset($_SESSION['valid_id'], $_SESSION['glpiname'], $_SESSION['glpiID']);
     unset($_SESSION['glpiactiveprofile'], $_SESSION['glpiactive_entity'], $_SESSION['glpigroups']);
+}
+} catch (\Throwable $e) {
+    // O finally acima ja restaurou config e limpou o banco antes de chegarmos
+    // aqui - agora reportamos a falha e encerramos com codigo de erro.
+    fwrite(STDERR, $e->getMessage() . "\n");
+    exit(1);
 }

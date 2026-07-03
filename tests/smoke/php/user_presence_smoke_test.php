@@ -154,6 +154,14 @@ $DB->delete('glpi_plugin_glpichat_events', [
     'users_id' => $users_id,
 ]);
 
+// IMPORTANTE: o corpo do teste fica num try/finally ANINHADO dentro de um
+// try/catch externo. Isso garante que o `finally` (limpeza das linhas
+// criadas neste ticket) SEMPRE execute antes do exit(1) do catch. Antes, o
+// catch chamava exit(1) diretamente, o que termina o processo na hora e pula
+// qualquer `finally` pendente - deixando participantes/eventos orfãos no
+// ticket sempre que uma asserção falhava aqui e contaminando os demais
+// smokes que rodam no mesmo ticket (causa raiz de falhas em cascata).
+try {
 try {
     $widget_controller = new WidgetController();
 
@@ -332,9 +340,6 @@ try {
     taskPass('Widget history expõe user_left após saída explícita via Widget/Leave');
 
     fwrite(STDOUT, "[PASS] Smoke de presenca de usuarios logados concluido\n");
-} catch (RuntimeException $error) {
-    fwrite(STDERR, "[FAIL] {$error->getMessage()}\n");
-    exit(1);
 } finally {
     // Cleanup
     if (isset($users_id) && isset($public_rooms_id) && isset($internal_rooms_id)) {
@@ -358,4 +363,10 @@ try {
     unset($_SESSION['glpiactive_entity']);
     unset($_SESSION['glpigroups']);
     unset($_SESSION['glpicrsftokens']);
+}
+} catch (RuntimeException $error) {
+    // O finally acima ja limpou as linhas orfãs antes de chegarmos aqui -
+    // agora reportamos a falha e encerramos com codigo de erro.
+    fwrite(STDERR, "[FAIL] {$error->getMessage()}\n");
+    exit(1);
 }

@@ -640,6 +640,49 @@ def main() -> None:
             # Cria um convite ativo e abre o painel de invites para verificar os badges.
             # O token CSRF foi rotacionado; busca o mais recente via Channels.
             tech_token = bootstrap_widget_token(tech, TICKET_ID)
+
+            # Defesa extra: revoga qualquer invite ativo remanescente deste ticket
+            # antes de criar o convite de badge. Isso evita que o teste falhe com
+            # "Limite maximo de convites ativos por chamado atingido." caso uma
+            # execucao anterior (deste ou de outro teste que compartilha o mesmo
+            # ticket) tenha deixado convites ativos para tras.
+            leftover_revoke_result = tech.evaluate(
+                """async ({ ticketId, token }) => {
+                    const listResp = await fetch(`/plugins/glpichat/Invite/List?tickets_id=${ticketId}`, {
+                        method: 'GET', credentials: 'same-origin',
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    });
+                    let listJson = null;
+                    try { listJson = await listResp.json(); } catch (e) { listJson = null; }
+                    const invites = (listJson && Array.isArray(listJson.invites)) ? listJson.invites : [];
+                    let currentToken = token;
+                    let revokedCount = 0;
+                    for (const invite of invites) {
+                        if (invite.status !== 'active') continue;
+                        const body = new FormData();
+                        body.set('invite_id', invite.id);
+                        body.set('tickets_id', ticketId);
+                        body.set('_glpi_csrf_token', currentToken);
+                        const r = await fetch('/plugins/glpichat/Invite/Revoke', {
+                            method: 'POST', body, credentials: 'same-origin',
+                            headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-Glpi-Csrf-Token': currentToken },
+                        });
+                        let j = null;
+                        try { j = await r.json(); } catch (e) { j = null; }
+                        if (j && j._glpi_csrf_token) currentToken = j._glpi_csrf_token;
+                        if (r.status === 200) revokedCount += 1;
+                    }
+                    return { revokedCount, currentToken };
+                }""",
+                {"ticketId": TICKET_ID, "token": tech_token},
+            )
+            tech_token = leftover_revoke_result.get("currentToken", tech_token)
+            if leftover_revoke_result.get("revokedCount", 0) > 0:
+                log_info(
+                    f"Convites ativos remanescentes revogados antes do teste de badge: "
+                    f"{leftover_revoke_result['revokedCount']}"
+                )
+
             badge_invite_result = tech.evaluate(
                 """async ({ ticketId, token }) => {
                     const body = new FormData();

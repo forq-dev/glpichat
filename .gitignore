@@ -37,3 +37,4 @@ tests/performance/logs/*
 .playwright-mcp/
 .agents-sync.json
 .mcp.json
+mcp.json

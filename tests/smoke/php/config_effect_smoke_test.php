@@ -101,6 +101,24 @@ function cfgSeedSession(): int
 {
     global $DB;
 
+    // Preferencial: usa o ator "glpi" (assign) do ticket dedicado da esteira,
+    // ja resolvido e exportado por tests/e2e/setup/prepare_env.php via
+    // GLPICHAT_GLPI_ID (ver tests/run_full_suite.sh). Isso garante um usuario
+    // com direito de leitura REAL sobre o ticket de teste, evitando a antiga
+    // query solta com LIMIT 1 sem ORDER BY: nao-deterministica entre motores
+    // (MySQL vs MariaDB podiam devolver planos/linhas diferentes para o mesmo
+    // WHERE, fazendo o "tecnico" as vezes cair no usuario post-only/Self-Service,
+    // que nao tem READ sobre um ticket onde nao e o solicitante).
+    $where = [
+        'glpi_users.is_active'            => 1,
+        'glpi_users.is_deleted'           => 0,
+        'glpi_profiles_users.profiles_id' => ['>', 0],
+    ];
+    $glpi_env_id = (int) (getenv('GLPICHAT_GLPI_ID') ?: 0);
+    if ($glpi_env_id > 0) {
+        $where['glpi_users.id'] = $glpi_env_id;
+    }
+
     $row = $DB->request([
         'SELECT' => [
             'glpi_users.id AS users_id',
@@ -117,10 +135,12 @@ function cfgSeedSession(): int
                 ],
             ],
         ],
-        'WHERE' => [
-            'glpi_users.is_active'            => 1,
-            'glpi_users.is_deleted'           => 0,
-            'glpi_profiles_users.profiles_id' => ['>', 0],
+        'WHERE' => $where,
+        // Fallback deterministico (sem GLPICHAT_GLPI_ID definido): prioriza o
+        // usuario "glpi" pelo nome antes de qualquer outro, e depois o menor id.
+        'ORDER' => [
+            new \Glpi\DBAL\QueryExpression("(glpi_users.name = 'glpi') DESC"),
+            'glpi_users.id ASC',
         ],
         'LIMIT' => 1,
     ])->current();

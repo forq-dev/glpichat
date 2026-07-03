@@ -103,7 +103,23 @@ if [[ -z "${GLPICHAT_TICKET_ID:-}" || "${GLPICHAT_TICKET_ID:-0}" -le 0 ]]; then
   exit 1
 fi
 export GLPICHAT_TICKET_ID
-printf '\n[INFO] Ticket dedicado da esteira: GLPICHAT_TICKET_ID=%s\n' "$GLPICHAT_TICKET_ID"
+
+# GLPICHAT_SELF_ID / GLPICHAT_GLPI_ID: atores REAIS (requester/assign) do ticket
+# dedicado, ja resolvidos por prepare_env.php. Exportados para que os testes
+# smoke-php semeiem a sessao de "tecnico" com um usuario que garantidamente tem
+# direito de leitura sobre o ticket, em vez de uma query solta com LIMIT 1 sem
+# ORDER BY (nao-deterministica entre motores/planos de execucao distintos -
+# ver .agents/references/security-audits.md / decisions.md).
+GLPICHAT_SELF_ID="$(sed -n 's/^GLPICHAT_SELF_ID=\([0-9][0-9]*\).*/\1/p' "$setup_log" | head -n1)"
+GLPICHAT_GLPI_ID="$(sed -n 's/^GLPICHAT_GLPI_ID=\([0-9][0-9]*\).*/\1/p' "$setup_log" | head -n1)"
+if [[ -z "${GLPICHAT_GLPI_ID:-}" || "${GLPICHAT_GLPI_ID:-0}" -le 0 ]]; then
+  printf '\n[FAIL] SETUP nao retornou GLPICHAT_GLPI_ID. Abortando.\n' >&2
+  exit 1
+fi
+export GLPICHAT_SELF_ID
+export GLPICHAT_GLPI_ID
+printf '\n[INFO] Ticket dedicado da esteira: GLPICHAT_TICKET_ID=%s (self=%s glpi=%s)\n' \
+  "$GLPICHAT_TICKET_ID" "${GLPICHAT_SELF_ID:-0}" "$GLPICHAT_GLPI_ID"
 
 # ---------------------------------------------------------------------------
 # unit-js
@@ -143,7 +159,11 @@ while IFS= read -r f; do
   [[ -z "$f" ]] && continue
   base="$(basename "$f")"
   log_file="$logs_root/smoke-php/${base%.php}.log"
-  docker exec -e GLPICHAT_TICKET_ID="$GLPICHAT_TICKET_ID" "$container_name" \
+  docker exec \
+    -e GLPICHAT_TICKET_ID="$GLPICHAT_TICKET_ID" \
+    -e GLPICHAT_SELF_ID="${GLPICHAT_SELF_ID:-0}" \
+    -e GLPICHAT_GLPI_ID="$GLPICHAT_GLPI_ID" \
+    "$container_name" \
     php "$container_plugin_root/tests/smoke/php/$base" >"$log_file" 2>&1
   record_result "smoke-php" "$base" "$?" "$log_file"
 done < <(find "$plugin_root/tests/smoke/php" -maxdepth 1 -name '*_smoke_test.php' | sort)

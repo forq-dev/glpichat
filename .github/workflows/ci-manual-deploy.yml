@@ -118,6 +118,18 @@ jobs:
           FLUSH PRIVILEGES;
           SQL
 
+      # O MariaDB via apt nao vem com as tabelas de timezone carregadas (ao
+      # contrario da imagem Docker oficial glpi/glpi, usada no ci-full.yml).
+      # Sem isso, funcionalidades baseadas em tempo do GLPI/plugin (TTL de
+      # convite, timeout de inatividade, janelas de throttle) se comportam
+      # de forma diferente - foi exatamente o padrao de falhas observado na
+      # primeira execucao deste job. O GLPI ja avisa isso no database:install
+      # e recomenda "database:enable_timezones" apos corrigir.
+      - name: "Load MySQL timezone tables into MariaDB"
+        run: |
+          sudo mysql_tzinfo_to_sql /usr/share/zoneinfo 2>/dev/null | sudo mysql -u root mysql
+          sudo systemctl restart mariadb
+
       # Usa o tarball oficial de release (nao "git clone --branch"): o tarball
       # ja vem com vendor/ e assets compilados prontos para producao (e o
       # metodo "instalacao manual" documentado pelo proprio GLPI), evitando ter
@@ -192,6 +204,7 @@ jobs:
             --default-language=en_GB \
             --no-interaction \
             --no-telemetry
+          php "$GLPI_INSTALL_DIR/bin/console" database:enable_timezones --no-interaction
 
       # /front/login.php responde 302 quando o GLPI ja esta instalado e a
       # sessao ainda nao existe (redireciona para index.php) - o mesmo

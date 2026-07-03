@@ -193,18 +193,23 @@ jobs:
             --no-interaction \
             --no-telemetry
 
+      # /front/login.php responde 302 quando o GLPI ja esta instalado e a
+      # sessao ainda nao existe (redireciona para index.php) - o mesmo
+      # comportamento que o healthcheck do ci-full.yml aceita implicitamente
+      # via "curl -sf" (que so falha em 4xx/5xx, nao em redirects). Por isso
+      # aceitamos 200 ou 3xx aqui, em vez de exigir 200 literal.
       - name: "Wait for GLPI to answer over HTTP"
         run: |
           for i in $(seq 1 36); do
             code="$(curl -s -o /dev/null -w '%{http_code}' "$GLPI_BASE_URL/front/login.php" || echo 000)"
-            if [[ "$code" == "200" ]]; then
-              echo "[OK] GLPI respondeu HTTP 200 apos ${i}x5s"
+            if [[ "$code" == "200" || "$code" =~ ^3[0-9]{2}$ ]]; then
+              echo "[OK] GLPI respondeu HTTP $code apos ${i}x5s"
               exit 0
             fi
             echo "  Aguardando GLPI ($i/36)... http_code=$code"
             sleep 5
           done
-          echo "[FAIL] GLPI nao respondeu HTTP 200 em 3 minutos"
+          echo "[FAIL] GLPI nao respondeu HTTP 200/3xx em 3 minutos"
           sudo apache2ctl -S || true
           sudo tail -n 100 /var/log/apache2/glpi_error.log || true
           exit 1

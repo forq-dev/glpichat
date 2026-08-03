@@ -2,7 +2,7 @@
    <name>GLPI Chat</name>
    <key>glpichat</key>
    <state>beta</state> <!-- stable | unstable | beta | alpha -->
-   <logo>http://link/to/logo/with/dimensions/40px/40px</logo>
+   <logo>https://github.com/forq-dev/glpichat/public/img/logo-glpichat.svg</logo>
    <description>
       <short>
          <en>Contextual chat linked to GLPI tickets.</en>
@@ -46,7 +46,6 @@
       </fr>
    </tags>
    <screenshots>
-      <screenshot>http://link/to/your/screenshot</screenshot>
-      <screenshot>http://link/to/your/screenshot</screenshot>
+      <screenshot>https://github.com/forq-dev/glpichat/raw/main/public/img/screenshot.png</screenshot>
    </screenshots>
 </root>

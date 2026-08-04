@@ -79,7 +79,7 @@ function plugin_version_glpichat(): array
         'version'        => PLUGIN_GLPICHAT_VERSION,
         'author'         => 'Forq',
         'license'        => 'GPLv3+',
-        'homepage'       => '',
+        'homepage'       => 'https://github.com/forq-dev/glpichat',
         'requirements'   => [
             'glpi' => [
                 'min' => '11.0.7',

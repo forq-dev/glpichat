@@ -1,8 +1,18 @@
 # GLPI Chat
 
+[![GitHub Repo stars](https://img.shields.io/github/stars/forq-dev/glpichat?style=social)](https://github.com/forq-dev/glpichat)
+
 Plugin de chat contextual em tempo real para o **GLPI 11.0.7+**, vinculado diretamente a chamados.
 
 O **GLPI Chat** permite a comunicação ágil e integrada entre técnicos, solicitantes e convidados sem a necessidade de ferramentas externas de comunicação (como Slack ou Teams). Ele organiza a conversação em duas salas independentes por chamado: uma sala pública (`Solicitante`) e uma sala interna (`Discussão técnica`).
+
+> ⭐ **Curtiu o GLPI Chat?** Deixe uma estrela no repositório — isso ajuda outros administradores a encontrarem o plugin e apoia o desenvolvimento contínuo.
+
+---
+
+## 🖼️ Visão Geral
+
+![Visão geral do widget de chat integrado ao GLPI](public/img/screenshots/glpi-screenshots.png)
 
 ---
 
@@ -110,7 +120,7 @@ O convidado clica no link, vê a página do chat com o nome do chamado e um cont
 ## 🔔 Notificações Personalizadas
 > 📖 [Documentação técnica completa](docs/features/notifications.md)
 
-O plugin registra **6 eventos de notificação** no GLPI, configuráveis como qualquer notificação nativa, com entrega simultânea por email e por toast AJAX no navegador.
+O plugin registra **8 eventos de notificação** no GLPI, configuráveis como qualquer notificação nativa, com entrega simultânea por email e por toast AJAX no navegador.
 
 ### Como configurar
 
@@ -128,6 +138,8 @@ O plugin registra **6 eventos de notificação** no GLPI, configuráveis como qu
 | `glpichat_guest_joined` | Convidado aceita o convite e entra no chat |
 | `glpichat_guest_left` | Convidado sai do chat |
 | `glpichat_guest_left_timeout` | Sessão do convidado expira por inatividade |
+| `glpichat_user_joined` | Usuário entra no chat *(registrado, sem disparo ativo no código atual)* |
+| `glpichat_user_left` | Usuário sai do chat *(registrado, sem disparo ativo no código atual)* |
 
 → [Ver documentação técnica completa](docs/features/notifications.md)
 
@@ -214,5 +226,14 @@ Para desenvolvedores, administradores de infraestrutura e técnicos que precisam
 * 🔄 [**Polling e Sincronização**](docs/architecture/flows/polling.md)
 * 🎨 [**Arquitetura do Frontend e Widget**](docs/architecture/frontend/widget.md)
 * 🔑 [**Sistema de Permissões (Integração GLPI)**](docs/architecture/glpi-integration/permissions.md)
+* ⚙️ [**Ambiente e Configuração (pré-requisitos de deploy)**](docs/architecture/glpi-integration/environment-and-config.md)
 * 🧪 [**Suíte de Testes e QA**](tests/README.md)
 * 📈 [**Testes de Carga (k6) e Capacidade**](docs/architecture/performance/load-testing.md)
+
+<br>
+
+<p align="center">
+  <sub>━━━━━━━━━━━━━━━━━━━━━━━</sub><br>
+  <sub>Curtiu o plugin? Deixe uma ⭐ no repositório para ajudar outros administradores a encontrá-lo.</sub><br>
+  <sub>Desenvolvido e mantido com apoio de <a href="https://www.forq.com.br/">Forq</a></sub>
+</p>

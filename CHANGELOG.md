@@ -2,7 +2,35 @@
 
 All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Added
+
+- Overview section with a widget screenshot in the main README
+- GitHub star badge and call-out in the README encouraging repository stars
+- Contribution guide (`CONTRIBUTING.md`) for external contributors
+- Environment variable example file (`.env.example`) covering the test suite
+- GitHub issue templates — bug report and feature request — under `.github/ISSUE_TEMPLATE/`
+
+### Changed
+
+- Standardized the project support footer across all documentation files (`README.md` and `docs/`)
+
+### Fixed
+
+- Corrected the notification events table in `README.md` and `docs/features/notifications.md`, which listed 6 events when the code actually registers 8
+- Fixed the screenshot link in `plugin.xml`, which pointed to a non-existent file
+- Fixed the logo link in `plugin.xml`, which did not resolve to a valid image
+- Fixed the published version's `download_url` in `plugin.xml`, which pointed to the unstable `main` branch zip instead of the fixed tag artifact
+- Filled in the empty `homepage` field in `setup.php`
+- Filled in the copyright notice placeholder in the `LICENSE` file
+
+### Security
+
+- Removed a hardcoded local absolute path exposing a developer's username and directory layout from a test helper script (`tests/helpers/patch_animations.py`)
 
 ## [1.0.0] - 2026-07-31
 
@@ -48,4 +76,5 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Restricted asset loading to prevent unauthorized resource inclusion
 - Validated all file uploads to prevent malicious file handling
 
+[unreleased]: https://github.com/forq-dev/glpichat/compare/v1.0.0...HEAD
 [1.0.0]: https://github.com/forq-dev/glpichat/releases/tag/v1.0.0

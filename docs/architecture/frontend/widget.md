@@ -113,3 +113,11 @@ O algoritmo `detectBottomObstruction()` escaneia elementos `fixed`/`sticky` na p
 **Animações CSS dependem da classe `.is-new`.** Se o polling retornar mensagens antigas (ex: após reconexão com `after_id` muito baixo), todas elas receberão `.is-new` e dispararão a animação de entrada. Isso pode acontecer se o estado local for perdido (ex: `localStorage` limpo entre sessões).
 
 **Skeleton loaders não têm timeout.** Se o backend não responder à primeira carga de histórico, o skeleton permanece visível indefinidamente. Não há fallback de erro para a carga inicial de mensagens.
+
+<br>
+
+<p align="center">
+  <sub>━━━━━━━━━━━━━━━━━━━━━━━</sub><br>
+  <sub>Curtiu o plugin? Deixe uma ⭐ no repositório para ajudar outros administradores a encontrá-lo.</sub><br>
+  <sub>Desenvolvido e mantido com apoio de <a href="https://www.forq.com.br/">Forq</a></sub>
+</p>

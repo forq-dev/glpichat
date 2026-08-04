@@ -97,3 +97,11 @@ A esteira `tests/run_full_suite.sh` prepara um ambiente determinístico e o leva
 - [ ] Direitos `plugin_glpichat_*` configurados nos perfis que usarão o chat.
 - [ ] Notificações + SMTP configurados (se quiser e-mail além do toast).
 - [ ] CronTasks de limpeza ativas (criadas no install) conforme a política de retenção desejada.
+
+<br>
+
+<p align="center">
+  <sub>━━━━━━━━━━━━━━━━━━━━━━━</sub><br>
+  <sub>Curtiu o plugin? Deixe uma ⭐ no repositório para ajudar outros administradores a encontrá-lo.</sub><br>
+  <sub>Desenvolvido e mantido com apoio de <a href="https://www.forq.com.br/">Forq</a></sub>
+</p>

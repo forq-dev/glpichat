@@ -2,7 +2,7 @@
    <name>GLPI Chat</name>
    <key>glpichat</key>
    <state>beta</state> <!-- stable | unstable | beta | alpha -->
-   <logo>https://github.com/forq-dev/glpichat/public/img/logo-glpichat.svg</logo>
+   <logo>https://github.com/forq-dev/glpichat/raw/main/public/img/logo-glpichat.svg</logo>
    <description>
       <short>
          <en>Contextual chat linked to GLPI tickets.</en>
@@ -25,7 +25,7 @@
       <version>
          <num>1.0.0</num>
          <compatibility>~11.0</compatibility>
-         <download_url>https://github.com/forq-dev/glpichat/archive/refs/heads/main.zip</download_url>
+         <download_url>https://github.com/forq-dev/glpichat/archive/refs/tags/v1.0.0.zip</download_url>
       </version>
    </versions>
    <langs>
@@ -46,6 +46,6 @@
       </fr>
    </tags>
    <screenshots>
-      <screenshot>https://github.com/forq-dev/glpichat/raw/main/public/img/screenshot.png</screenshot>
+      <screenshot>https://github.com/forq-dev/glpichat/raw/main/public/img/screenshots/glpi-screenshots.png</screenshot>
    </screenshots>
 </root>

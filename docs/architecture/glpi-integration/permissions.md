@@ -74,3 +74,11 @@ A migração de direitos legados é controlada pela variável de configuração 
 **Direitos calculados como estado pré-computado podem mascarar mudanças de perfil em tempo real.** As funções em `access.php` calculam os booleans de permissão uma vez por request. Se o administrador alterar o perfil de um usuário enquanto ele estiver com o widget aberto, o usuário só perceberá a mudança na próxima recarga de página — não no próximo ciclo de polling.
 
 **Perfis na interface Helpdesk dependem da inicialização do plugin para ter permissões.** Se `plugin_init_glpichat()` não for executado (ex: plugin desativado e reativado sem reload), os direitos não são injetados em `Profile::$helpdesk_rights` e usuários Helpdesk perdem acesso ao widget mesmo com os direitos configurados corretamente no perfil.
+
+<br>
+
+<p align="center">
+  <sub>━━━━━━━━━━━━━━━━━━━━━━━</sub><br>
+  <sub>Curtiu o plugin? Deixe uma ⭐ no repositório para ajudar outros administradores a encontrá-lo.</sub><br>
+  <sub>Desenvolvido e mantido com apoio de <a href="https://www.forq.com.br/">Forq</a></sub>
+</p>

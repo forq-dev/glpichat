@@ -77,3 +77,11 @@ Cada mensagem enviada por um convidado externo cria um `ITILFollowup` no chamado
 - Não há envio automático de email com o link — o técnico precisa copiar e enviar manualmente.
 - Um convidado não pode acessar outros chamados além do chamado para o qual foi convidado.
 - Não há suporte a múltiplos convidados com o mesmo link — cada convite é nominalmente vinculado a um convidado.
+
+<br>
+
+<p align="center">
+  <sub>━━━━━━━━━━━━━━━━━━━━━━━</sub><br>
+  <sub>Curtiu o plugin? Deixe uma ⭐ no repositório para ajudar outros administradores a encontrá-lo.</sub><br>
+  <sub>Desenvolvido e mantido com apoio de <a href="https://www.forq.com.br/">Forq</a></sub>
+</p>

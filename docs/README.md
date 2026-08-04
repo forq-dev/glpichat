@@ -44,3 +44,11 @@ Para instalação e configuração geral, consulte o [README principal](../READM
 | Doc | Quando consultar |
 |-----|-----------------|
 | [Testes de Carga (k6)](architecture/performance/load-testing.md) | Ao avaliar quantos usuários simultâneos o sistema suporta, rodar/interpretar a suíte k6 de novo, ou investigar degradação de latência sob carga |
+
+<br>
+
+<p align="center">
+  <sub>━━━━━━━━━━━━━━━━━━━━━━━</sub><br>
+  <sub>Curtiu o plugin? Deixe uma ⭐ no repositório para ajudar outros administradores a encontrá-lo.</sub><br>
+  <sub>Desenvolvido e mantido com apoio de <a href="https://www.forq.com.br/">Forq</a></sub>
+</p>

@@ -91,3 +91,11 @@ O CSRF token é renovado a cada resposta de polling — sem necessidade de refre
 **CSRF expirado em sessões muito longas:** Embora o CSRF seja renovado a cada resposta, se o usuário deixar o GLPI aberto sem nenhuma requisição (ex: aba sem chats em segundo plano por muito tempo), o token pode expirar antes do próximo polling. O JS trata o erro 403 reiniciando o ciclo de bootstrap.
 
 **Convidado sem detecção de inatividade no cliente:** O `glpichat-guest.js` não implementa detecção de inatividade local — a expiração de sessão do convidado é detectada apenas pelo backend (via `last_activity`) e comunicada como evento `invite_revoked` no próximo `GET /Guest/Sync`.
+
+<br>
+
+<p align="center">
+  <sub>━━━━━━━━━━━━━━━━━━━━━━━</sub><br>
+  <sub>Curtiu o plugin? Deixe uma ⭐ no repositório para ajudar outros administradores a encontrá-lo.</sub><br>
+  <sub>Desenvolvido e mantido com apoio de <a href="https://www.forq.com.br/">Forq</a></sub>
+</p>

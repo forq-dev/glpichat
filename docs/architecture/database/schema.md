@@ -229,3 +229,11 @@ A ausência de FK reais significa que registros órfãos são possíveis se cham
 **`itilfollowups_id` é FK lógica sem constraint:** Se um `ITILFollowup` for deletado diretamente no banco, a mensagem correspondente ficará com um ID órfão. O código PHP não verifica a existência do followup ao renderizar mensagens antigas.
 
 **Ausência de constraints FK:** Deletar um chamado diretamente no banco (sem passar pelo ciclo de vida do GLPI) deixa todas as tabelas do plugin com registros órfãos para aquele `tickets_id`. O plugin não registra hook de purga para `Ticket`.
+
+<br>
+
+<p align="center">
+  <sub>━━━━━━━━━━━━━━━━━━━━━━━</sub><br>
+  <sub>Curtiu o plugin? Deixe uma ⭐ no repositório para ajudar outros administradores a encontrá-lo.</sub><br>
+  <sub>Desenvolvido e mantido com apoio de <a href="https://www.forq.com.br/">Forq</a></sub>
+</p>

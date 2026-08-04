@@ -1,6 +1,10 @@
+import os
 import re
 
-file_path = "/home/h1d4n/Documents/dev-glpi/glpi/plugins/glpichat/public/css/glpichat.css"
+file_path = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    "public", "css", "glpichat.css",
+)
 with open(file_path, "r") as f:
     content = f.read()
 

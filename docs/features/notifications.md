@@ -12,7 +12,7 @@ Dispara notificações por email e por toast AJAX no navegador quando mensagens 
 ### Como configurar
 
 1. Acesse **Administração > Notificações** no GLPI.
-2. Filtre por "GLPI CHAT" na lista — os 6 eventos registrados aparecerão.
+2. Filtre por "GLPI CHAT" na lista — os 8 eventos registrados aparecerão.
 3. Para cada notificação: edite o modelo de email, adicione ou remova destinatários, ative ou desative o evento individualmente.
 4. Salve. As alterações entram em vigor imediatamente para os próximos eventos.
 
@@ -45,6 +45,8 @@ As notificações não têm um direito próprio no GLPI Chat. A entrega segue os
 | `glpichat_guest_joined` | Um convidado aceita o convite e entra no chat | Técnicos designados, grupos, observadores |
 | `glpichat_guest_left` | Um convidado sai do chat (fecha a aba) | Técnicos designados, grupos, observadores |
 | `glpichat_guest_left_timeout` | Sessão do convidado expira por inatividade | Técnicos designados, grupos, observadores |
+| `glpichat_user_joined` | Registrado e instalado, mas nenhum ponto do código atual chama a função que dispararia este evento | — |
+| `glpichat_user_left` | Registrado e instalado, mas nenhum ponto do código atual chama a função que dispararia este evento | — |
 
 ### Tags disponíveis no modelo de notificação
 
@@ -70,9 +72,22 @@ O sistema suprime a notificação AJAX para o usuário que acabou de enviar a me
 
 As tags `##glpichat.sender_name##` para eventos de convidado retornam o nome informado no convite (ex: `João`), não um ID de usuário GLPI.
 
+### `glpichat_user_joined` e `glpichat_user_left` nunca disparam atualmente
+
+Os dois eventos são criados na instalação (`glpichat_install_default_notifications()`) e aparecem normalmente na lista de notificações filtrada por "GLPI CHAT" — mas as funções PHP responsáveis por chamar `NotificationEvent::raiseEvent()` para eles (`glpichat_raise_user_joined_notification_event()` / `glpichat_raise_user_left_notification_event()`, em `src/functions.php`) não são invocadas por nenhum outro ponto do plugin. Configurar destinatários para esses dois eventos não terá efeito prático até que algum fluxo do plugin passe a chamá-los.
+
 ## Limitações conhecidas
 
 - Não há notificação por SMS ou webhook — apenas email e toast AJAX nativo do GLPI.
 - As notificações seguem as mesmas regras de throttling e fila do sistema de notificações do GLPI — emails podem atrasar em instâncias com alta carga.
 - Não é possível configurar destinatários diferentes por chamado — a configuração de destinatários é global por tipo de evento.
 - O evento `glpichat_guest_left_timeout` pode demorar até o próximo ciclo de detecção de inatividade para ser disparado (não é instantâneo).
+- `glpichat_user_joined` e `glpichat_user_left` estão registrados e instalados, mas nenhuma parte do plugin os dispara hoje — ver "Comportamentos não óbvios" acima.
+
+<br>
+
+<p align="center">
+  <sub>━━━━━━━━━━━━━━━━━━━━━━━</sub><br>
+  <sub>Curtiu o plugin? Deixe uma ⭐ no repositório para ajudar outros administradores a encontrá-lo.</sub><br>
+  <sub>Desenvolvido e mantido com apoio de <a href="https://www.forq.com.br/">Forq</a></sub>
+</p>

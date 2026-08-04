@@ -80,3 +80,11 @@ A paginação infinita carrega mensagens e eventos **mais antigos** conforme o u
 - O log de auditoria não tem paginação na aba — exibe todos os registros de uma vez. Em chamados com histórico muito extenso, a aba pode demorar para carregar.
 - Não é possível exportar o log de auditoria diretamente pela interface — é necessário consultar a tabela `glpi_plugin_glpichat_auditlogs` no banco de dados.
 - Eventos de sistema mais antigos que 30 dias não são exibidos na timeline, mesmo que o chamado ainda esteja aberto. O log de auditoria é a fonte de verdade para eventos históricos.
+
+<br>
+
+<p align="center">
+  <sub>━━━━━━━━━━━━━━━━━━━━━━━</sub><br>
+  <sub>Curtiu o plugin? Deixe uma ⭐ no repositório para ajudar outros administradores a encontrá-lo.</sub><br>
+  <sub>Desenvolvido e mantido com apoio de <a href="https://www.forq.com.br/">Forq</a></sub>
+</p>

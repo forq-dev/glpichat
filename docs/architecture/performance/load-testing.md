@@ -88,3 +88,11 @@ A suíte completa é executada via `./tests/performance/run_k6.sh <base_url> [sc
 Isso nunca acontece em produção real — cada agente logado tem sua própria sessão e portanto seu próprio lock. Consequência prática: os números de "teto de req/s" desses cenários específicos (lado widget/agente) **não devem ser usados para decisão de capacidade real**. Eles só servem para detectar regressão de latência de um único agente ao longo do tempo (ex: comparar execuções antes/depois de uma mudança de código). Os únicos cenários com números de capacidade confiáveis, por usarem sessões distintas de verdade, são `guest_polling_breakpoint.js` e `rooms_scale.js`.
 
 **Lacuna de cobertura conhecida.** `Widget/Poll` aceita até 20 canais por requisição — na vida real um agente não faz N requisições individuais para N tickets abertos, faz poucas requisições em lote. Nenhum script hoje simula esse padrão de uso em lote; um teste de capacidade real do lado agente (com múltiplas sessões distintas E poll em lote) ainda não existe nesta suíte.
+
+<br>
+
+<p align="center">
+  <sub>━━━━━━━━━━━━━━━━━━━━━━━</sub><br>
+  <sub>Curtiu o plugin? Deixe uma ⭐ no repositório para ajudar outros administradores a encontrá-lo.</sub><br>
+  <sub>Desenvolvido e mantido com apoio de <a href="https://www.forq.com.br/">Forq</a></sub>
+</p>

@@ -64,5 +64,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Validated all file uploads to prevent malicious file handling
 - Removed a hardcoded local absolute path exposing a developer's username and directory layout from a test helper script (`tests/helpers/patch_animations.py`)
 
-[unreleased]: https://github.com/forq-dev/glpichat/compare/glpichat-1.0.0...HEAD
-[1.0.0]: https://github.com/forq-dev/glpichat/releases/tag/glpichat-1.0.0
+[unreleased]: https://github.com/forq-dev/glpichat/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/forq-dev/glpichat/releases/tag/v1.0.0

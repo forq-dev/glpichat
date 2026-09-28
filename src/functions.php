@@ -1197,7 +1197,13 @@ function glpichat_messages_before(int $rooms_id, int $before_id, int $limit): ar
     return array_reverse($rows);
 }
 
-function glpichat_upload_document(int $tickets_id, UploadedFile $file, bool $suppress_document_hook): int
+function glpichat_upload_document(
+    int $tickets_id,
+    UploadedFile $file,
+    bool $suppress_document_hook,
+    string $target_itemtype,
+    int $target_items_id
+): int
 {
     global $CFG_GLPI;
 
@@ -1226,8 +1232,8 @@ function glpichat_upload_document(int $tickets_id, UploadedFile $file, bool $sup
         $document = new Document();
         $GLOBALS['GLPICHAT_SUPPRESS_DOCUMENT_HOOK'] = $suppress_document_hook;
         $id = $document->add([
-            'itemtype' => Ticket::class,
-            'items_id' => $tickets_id,
+            'itemtype' => $target_itemtype,
+            'items_id' => $target_items_id,
             'name' => $original_name,
             'upload_file' => $safe_name,
             '_only_if_upload_succeed' => 1,

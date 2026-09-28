@@ -258,7 +258,7 @@ function glpichat_guest_upload_message_use_case(
     $room = $room_by_id($rooms_id);
     $tickets_id = glpichat_guest_ticket_id_from_room($room);
     $assert_ticket_open_for_chat($tickets_id);
-    $documents_id = (int) $upload_document($tickets_id, $validated_file, true);
+    $documents_id = (int) $upload_document($tickets_id, $validated_file, true, 'Ticket', $tickets_id);
     $content = glpichat_guest_attachment_message_content($validated_file->getClientOriginalName());
     $followup_user_id = (int) $external_followup_user_id();
     $followups_id = (int) $add_followup($tickets_id, $followup_user_id, $content, false);

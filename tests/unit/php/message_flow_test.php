@@ -196,8 +196,8 @@ glpichat_unit_assert_same_array(
     [
         ['assert_can_send', 18, 'public'],
         ['current_user_id'],
-        ['upload_document', 18, 'fixture.txt', true],
         ['add_followup', 18, 71, 'Attachment added from GLPI Chat: fixture.txt', false],
+        ['upload_document', 18, 'fixture.txt', true],
         ['room_id', 18, 'public'],
         ['participant_id_for_user', 74, 71],
         ['add_message', 18, 'public', 'user', 71, 75, 'Attachment added from GLPI Chat: fixture.txt', 72, 73],
@@ -262,8 +262,8 @@ glpichat_unit_assert_same_array(
     [
         ['assert_can_send', 19, 'internal'],
         ['current_user_id'],
-        ['upload_document', 19, 'fixture.txt', true],
         ['add_followup', 19, 81, 'Attachment added from GLPI Chat: fixture.txt', true],
+        ['upload_document', 19, 'fixture.txt', true],
         ['room_id', 19, 'internal'],
         ['participant_id_for_user', 84, 81],
         ['add_message', 19, 'internal', 'user', 81, 85, 'Attachment added from GLPI Chat: fixture.txt', 82, 83],

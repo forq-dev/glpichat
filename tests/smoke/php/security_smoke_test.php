@@ -160,7 +160,7 @@ $blockedBasename = basename($blockedFixture);
 assertThrows(
     static function () use ($blockedFixture): void {
         $file = new UploadedFile($blockedFixture, 'blocked_upload.php', 'application/x-php', null, true);
-        glpichat_upload_document(1, $file, true);
+        glpichat_upload_document(1, $file, true, 'Ticket', 1);
     },
     'não é permitido pelo GLPI',
     'Upload com extensão bloqueada é rejeitado'
@@ -185,7 +185,7 @@ if ($htmlTypeRow) {
     assertThrows(
         static function () use ($blockedHtmlFixture): void {
             $file = new UploadedFile($blockedHtmlFixture, 'blocked_upload.html', 'text/html', null, true);
-            glpichat_upload_document(1, $file, true);
+            glpichat_upload_document(1, $file, true, 'Ticket', 1);
         },
         'não é permitido pelo GLPI',
         'Upload de .html bloqueado é rejeitado'
@@ -219,7 +219,7 @@ $oversizedName = 'oversized-smoke.txt';
 assertThrows(
     static function () use ($oversizedPath, $oversizedName, $effectiveMaxSize): void {
         $file = new OversizedUploadedFile($oversizedPath, $oversizedName, $effectiveMaxSize + 1);
-        glpichat_upload_document(1, $file, true);
+        glpichat_upload_document(1, $file, true, 'Ticket', 1);
     },
     'excede o limite de tamanho',
     'Upload acima do limite é rejeitado'

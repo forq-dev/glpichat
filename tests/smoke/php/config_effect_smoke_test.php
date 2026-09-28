@@ -23,6 +23,9 @@ if (!function_exists('plugin_init_glpichat')) {
 if (!function_exists('plugin_glpichat_install')) {
     require dirname(__DIR__, 3) . '/hook.php';
 }
+if (!function_exists('glpichat_create_invite_use_case')) {
+    require dirname(__DIR__, 3) . '/src/flows/invite_flow.php';
+}
 
 Session::start();
 plugin_glpichat_install();

@@ -151,8 +151,11 @@ function glpichat_default_right_mask(
     if ($is_unknown_central) {
         return match ($right_name) {
             'plugin_glpichat_public'        => READ | CREATE,
-            'plugin_glpichat_internal'      => READ | CREATE,
-            'plugin_glpichat_invite'        => READ | CREATE | UPDATE,
+            // GHSA-pf43-5mc3-g62m (HIGH-2): unknown central profiles (e.g. native
+            // Read-Only, Supervisor) must not get write access to the internal
+            // channel nor be able to create/revoke guest invitations by default.
+            'plugin_glpichat_internal'      => READ,
+            'plugin_glpichat_invite'        => READ,
             'plugin_glpichat_view_audit'    => READ,
             default                          => 0,
         };

@@ -415,4 +415,93 @@ lcAssert(
 );
 lcPass('E Teardown reinstala o schema e restaura as configs originais');
 
+// =============================================================================
+// F) DIREITOS DE PERFIS NATIVOS APOS INSTALACAO REAL (GHSA-pf43-5mc3-g62m HIGH-2).
+//    Prova, contra uma instalacao FRESCA de verdade (pos uninstall+reinstall da
+//    secao E acima), que a correcao de glpichat_default_right_mask() se aplica
+//    de fato via plugin_glpichat_install()/glpichat_add_profile_rights():
+//    - Quem instala o plugin (perfis admin-like nativos) continua com acesso
+//      total: a instalacao NAO fica mais restritiva para o administrador.
+//    - Perfis "unknown central" nativos (Read-Only, Supervisor) saem da
+//      instalacao apenas com READ em plugin_glpichat_internal/invite.
+// =============================================================================
+
+/** @return ?int */
+function lcProfileIdByName(string $name): ?int
+{
+    global $DB;
+    $row = $DB->request([
+        'SELECT' => ['id'],
+        'FROM'   => Profile::getTable(),
+        'WHERE'  => ['name' => $name],
+        'LIMIT'  => 1,
+    ])->current();
+    return is_array($row) ? (int) $row['id'] : null;
+}
+
+function lcProfileRightMask(int $profiles_id, string $right_name): ?int
+{
+    global $DB;
+    $row = $DB->request([
+        'SELECT' => ['rights'],
+        'FROM'   => ProfileRight::getTable(),
+        'WHERE'  => ['profiles_id' => $profiles_id, 'name' => $right_name],
+        'LIMIT'  => 1,
+    ])->current();
+    return is_array($row) ? (int) $row['rights'] : null;
+}
+
+$lc_native_profiles = [
+    'Read-Only'   => 'unknown_central', // nao esta em nenhuma lista conhecida (nem admin, nem tech)
+    'Supervisor'  => 'unknown_central', // idem
+    'Super-Admin' => 'admin_like',
+    'Admin'       => 'admin_like',
+];
+
+foreach ($lc_native_profiles as $lc_profile_name => $lc_bucket) {
+    $lc_profiles_id = lcProfileIdByName($lc_profile_name);
+    if ($lc_profiles_id === null) {
+        fwrite(STDOUT, "[SKIP] Perfil nativo '{$lc_profile_name}' nao existe nesta instancia; verificacao F pulada para ele.\n");
+        continue;
+    }
+
+    $lc_internal_rights = lcProfileRightMask($lc_profiles_id, 'plugin_glpichat_internal');
+    $lc_invite_rights   = lcProfileRightMask($lc_profiles_id, 'plugin_glpichat_invite');
+
+    lcAssert(
+        $lc_internal_rights !== null,
+        "F Instalacao fresca deve criar ProfileRight de plugin_glpichat_internal para o perfil nativo '{$lc_profile_name}'"
+    );
+    lcAssert(
+        $lc_invite_rights !== null,
+        "F Instalacao fresca deve criar ProfileRight de plugin_glpichat_invite para o perfil nativo '{$lc_profile_name}'"
+    );
+
+    if ($lc_bucket === 'unknown_central') {
+        // Read-Only/Supervisor: correcao do HIGH-2 deve restringir a apenas READ.
+        lcAssert(
+            $lc_internal_rights === READ,
+            "F Perfil '{$lc_profile_name}' (unknown central) deve sair da instalacao com plugin_glpichat_internal == READ (1), obtido: {$lc_internal_rights}"
+        );
+        lcAssert(
+            $lc_invite_rights === READ,
+            "F Perfil '{$lc_profile_name}' (unknown central) deve sair da instalacao com plugin_glpichat_invite == READ (1), obtido: {$lc_invite_rights}"
+        );
+        fwrite(STDOUT, "[PASS] F Perfil nativo '{$lc_profile_name}' (unknown central) instalado apenas com READ em internal/invite (internal={$lc_internal_rights}, invite={$lc_invite_rights})\n");
+    } else {
+        // Super-Admin/Admin: quem instala o plugin continua com acesso total,
+        // a instalacao NAO bloqueia nem restringe o administrador.
+        lcAssert(
+            ($lc_internal_rights & (READ | CREATE)) === (READ | CREATE),
+            "F Perfil '{$lc_profile_name}' (admin-like) deve manter READ|CREATE em plugin_glpichat_internal, obtido: {$lc_internal_rights}"
+        );
+        lcAssert(
+            ($lc_invite_rights & (READ | CREATE | UPDATE)) === (READ | CREATE | UPDATE),
+            "F Perfil '{$lc_profile_name}' (admin-like) deve manter READ|CREATE|UPDATE em plugin_glpichat_invite, obtido: {$lc_invite_rights}"
+        );
+        fwrite(STDOUT, "[PASS] F Perfil nativo '{$lc_profile_name}' (admin-like) instalado com acesso completo em internal/invite (internal={$lc_internal_rights}, invite={$lc_invite_rights})\n");
+    }
+}
+lcPass('F Direitos de perfis nativos confirmados numa instalacao real (admin-like = acesso total, unknown central = so READ)');
+
 fwrite(STDOUT, "[PASS] Lifecycle install/uninstall concluido\n");

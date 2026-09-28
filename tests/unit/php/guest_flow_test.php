@@ -15,6 +15,7 @@ if (!function_exists('glpichat_config_int')) {
 require dirname(__DIR__, 2) . '/bootstrap/unit.php';
 require_once dirname(__DIR__, 3) . '/src/db/guest_db.php';
 require_once dirname(__DIR__, 3) . '/src/flows/guest_flow.php';
+require_once dirname(__DIR__, 3) . '/src/core_event_feed.php';
 
 final class GuestFlowUploadedFile extends UploadedFile
 {
@@ -331,5 +332,116 @@ glpichat_unit_assert_same_array(
 glpichat_unit_pass('Guest upload use case orchestrates dependencies in canonical order');
 
 @unlink($upload_fixture);
+
+// -----------------------------------------------------------------------
+// MEDIUM-1 (GHSA-pf43-5mc3-g62m): a guest must not be able to replay the
+// ticket's whole pre-join event history by supplying an arbitrary
+// last_event_id cursor. glpichat_guest_sync_use_case() only clamps the
+// event cursor to joined_at when the client sends no cursor at all
+// ('' or '0'); any other client-supplied value is passed to events()
+// unmodified, with no validation against joined_at.
+// -----------------------------------------------------------------------
+
+$medium1_joined_at = '2026-09-28 10:00:00';
+$medium1_forged_cursor = glpichat_event_cursor('1970-01-01 00:00:00', 'A', 0);
+$medium1_expected_floor_cursor = glpichat_event_cursor($medium1_joined_at, '', 0);
+
+// --- (b) Regression / legitimate pagination: client cursor is NEWER than
+//     joined_at, so it must be passed through to events() unchanged. This
+//     must pass today and keep passing after the fix.
+$medium1_pagination_joined_at = '2026-09-27 09:00:00';
+$medium1_client_cursor = glpichat_event_cursor('2026-09-28 08:00:00', 'E', 500);
+$medium1_pagination_captured_cursor = null;
+
+glpichat_guest_sync_use_case(
+    'guest-token',
+    0,
+    $medium1_client_cursor,
+    false,
+    static function (string $session_token) use ($medium1_pagination_joined_at): array {
+        return [
+            'id' => 81,
+            'rooms_id' => 82,
+            'participant_type' => GLPICHAT_ACTOR_GUEST,
+            'joined_at' => $medium1_pagination_joined_at,
+            'last_activity' => $medium1_pagination_joined_at,
+        ];
+    },
+    static function (int $rooms_id): array {
+        return ['id' => $rooms_id, 'tickets_id' => 83, 'room_type' => GLPICHAT_ROOM_PUBLIC];
+    },
+    static function (int $rooms_id, int $last_message_id): array {
+        return [];
+    },
+    static function (int $rooms_id, string $last_event_id) use (&$medium1_pagination_captured_cursor): array {
+        $medium1_pagination_captured_cursor = $last_event_id;
+        return [];
+    },
+    static function (int $tickets_id): int {
+        return 5;
+    },
+    static function (int $participants_id, bool $is_typing): void {
+    },
+    static function (int $rooms_id, int $exclude_participant_id): array {
+        return [];
+    }
+);
+
+glpichat_unit_assert_same(
+    $medium1_client_cursor,
+    $medium1_pagination_captured_cursor,
+    'MEDIUM-1 (GHSA-pf43-5mc3-g62m) regression: legitimate pagination cursor newer than joined_at must reach events() unchanged'
+);
+glpichat_unit_pass('MEDIUM-1 (GHSA-pf43-5mc3-g62m) regression: legitimate pagination cursor newer than joined_at reaches events() unchanged');
+
+// --- (a) Attack: client cursor is a FORGED value older than joined_at
+//     (built with the real glpichat_event_cursor() helper, not a hardcoded
+//     string). Today this is forwarded to events() as-is, letting a guest
+//     replay the whole pre-join event history (followups, status changes,
+//     guest_joined/guest_left/user_joined/user_left of other participants).
+//     After the fix, the cursor reaching events() must be clamped to the
+//     joined_at floor, exactly like the '' / '0' case already is.
+$medium1_captured_event_cursor = null;
+
+glpichat_guest_sync_use_case(
+    'guest-token',
+    0,
+    $medium1_forged_cursor,
+    false,
+    static function (string $session_token) use ($medium1_joined_at): array {
+        return [
+            'id' => 71,
+            'rooms_id' => 72,
+            'participant_type' => GLPICHAT_ACTOR_GUEST,
+            'joined_at' => $medium1_joined_at,
+            'last_activity' => $medium1_joined_at,
+        ];
+    },
+    static function (int $rooms_id): array {
+        return ['id' => $rooms_id, 'tickets_id' => 73, 'room_type' => GLPICHAT_ROOM_PUBLIC];
+    },
+    static function (int $rooms_id, int $last_message_id): array {
+        return [];
+    },
+    static function (int $rooms_id, string $last_event_id) use (&$medium1_captured_event_cursor): array {
+        $medium1_captured_event_cursor = $last_event_id;
+        return [];
+    },
+    static function (int $tickets_id): int {
+        return 5;
+    },
+    static function (int $participants_id, bool $is_typing): void {
+    },
+    static function (int $rooms_id, int $exclude_participant_id): array {
+        return [];
+    }
+);
+
+glpichat_unit_assert_same(
+    $medium1_expected_floor_cursor,
+    $medium1_captured_event_cursor,
+    'MEDIUM-1 (GHSA-pf43-5mc3-g62m): guest-supplied event cursor older than joined_at must be clamped to the joined_at floor before reaching events(), never replayed as-is'
+);
+glpichat_unit_pass('MEDIUM-1 (GHSA-pf43-5mc3-g62m): guest-supplied event cursor older than joined_at is clamped to the joined_at floor');
 
 fwrite(STDOUT, "[PASS] Guest flow unit tests completed\n");

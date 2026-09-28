@@ -178,9 +178,19 @@ function glpichat_guest_sync_use_case(
 
     // For events, use joined_at as the initial cursor date when no cursor has been set yet,
     // so the SQL query already filters by date instead of discarding rows in PHP.
-    $effective_event_cursor = ($last_event_id === '' || $last_event_id === '0') && $joined_at !== ''
-        ? glpichat_event_cursor($joined_at, '', 0)
-        : $last_event_id;
+    // The client-supplied cursor is never trusted below the joined_at floor: a guest
+    // must not be able to replay pre-join history by forging an old last_event_id
+    // (GHSA-pf43-5mc3-g62m). A cursor at or after the floor (legitimate pagination)
+    // is passed through unchanged.
+    $joined_at_floor_cursor = $joined_at !== '' ? glpichat_event_cursor($joined_at, '', 0) : '';
+    $has_client_event_cursor = $last_event_id !== '' && $last_event_id !== '0';
+    if (!$has_client_event_cursor) {
+        $effective_event_cursor = $joined_at_floor_cursor !== '' ? $joined_at_floor_cursor : $last_event_id;
+    } elseif ($joined_at_floor_cursor !== '' && glpichat_event_is_after_cursor($joined_at_floor_cursor, $last_event_id)) {
+        $effective_event_cursor = $joined_at_floor_cursor;
+    } else {
+        $effective_event_cursor = $last_event_id;
+    }
     $filtered_events = $events($rooms_id, $effective_event_cursor);
 
     return [
